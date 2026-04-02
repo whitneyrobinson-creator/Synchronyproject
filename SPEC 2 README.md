@@ -143,22 +143,20 @@ A documentation team member provides a current schema and a prior version. The s
 
 <!--
   Features are derived from the Claude Agent Skills architecture: each skill is composed of
-  SKILL.md (instructions), Scripts (deterministic code), and Assets (templates, samples, configs).
-  Both skills exceeded the 400-word SKILL.md complexity threshold, justifying the 3-feature
-  split per skill. The two skills are independent (no runtime dependency), so no integration
-  feature is required.
+  SKILL.md (LLM instructions), Scripts (deterministic code), and Assets (templates and static resources).
+  The two skills are independent (no runtime dependency), so no integration feature is required.
 
-  Build Order: Assets → SKILL.md → Scripts (per skill). Assets are built first to validate
-  the output format with a completed example before automating it.
+  Build Order: SKILL.md → Scripts → Assets (per skill). SKILL.md is built first to understand
+  what the LLM needs to do, then Scripts to support it with code, then Assets for templates.
 -->
 
 ### Skill 1 — Data Dictionary Generation
 
-| Feature | Name | Description | Functional Requirements |
-|---|---|---|---|
-| **F1** | Assets — Data Dictionary | Completed example data dictionary, QA report, and change report that validate the output format is correct and audit-ready. Blank templates derived from the validated examples for script population. Sample schema and glossary files for testing. | FR-012, FR-013, FR-014 |
-| **F2** | SKILL.md — Data Dictionary | Step-by-step instructions for the agent: input validation, field extraction, description generation, confidence scoring, citation attachment, glossary mapping, timestamp assignment, output assembly, and QA report generation. References the validated templates from F1. | FR-001, FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011 |
-| **F3** | Scripts — Data Dictionary | Deterministic Python scripts that parse schema files (JSON/YAML/DDL), extract field metadata, validate inputs before LLM processing, populate templates, generate QA reports with coverage stats, and optionally produce change reports from prior schema versions. | FR-001, FR-005, FR-006, FR-008, FR-009, FR-010, FR-011, FR-012, FR-013, FR-014 |
+| Feature | Name | Responsibility | Simple Version | Functional Requirements |
+|---|---|---|---|---|
+| **F1** | SKILL.md — Data Dictionary | Descriptions, confidence scores, clarification flags, glossary interpretation | The LLM thinks | FR-007, FR-008, FR-009, FR-011 |
+| **F2** | Scripts — Data Dictionary | Parsing, extracting, validating, citing, timestamping, counting, assembling | The code works | FR-001, FR-005, FR-006, FR-008, FR-009, FR-010, FR-011, FR-012, FR-013 |
+| **F3** | Assets — Data Dictionary | Templates that define what the outputs look like | The blank forms | FR-012, FR-013 |
 
 ### Skill 2 — RCSA Control Narrative Generation
 
@@ -172,12 +170,12 @@ A documentation team member provides a current schema and a prior version. The s
 
 | Order | Feature | Rationale |
 |---|---|---|
-| 1 | F1 — Assets: Data Dictionary | Validate the output format with a completed example before automating |
-| 2 | F2 — SKILL.md: Data Dictionary | Write instructions referencing the validated templates |
-| 3 | F3 — Scripts: Data Dictionary | Build the code that automates population (completes Skill 1) |
-| 4 | F4 — Assets: RCSA | Validate the output format with a completed example before automating |
-| 5 | F5 — SKILL.md: RCSA | Write instructions referencing the validated templates |
-| 6 | F6 — Scripts: RCSA | Build the code that automates population (completes Skill 2) |
+| 1 | F1 — SKILL.md: Data Dictionary | Understand what the LLM needs to do first |
+| 2 | F2 — Scripts: Data Dictionary | Build the code that supports the LLM work |
+| 3 | F3 — Assets: Data Dictionary | Create the templates that define output format (completes Skill 1) |
+| 4 | F4 — SKILL.md: RCSA | Understand what the LLM needs to do first |
+| 5 | F5 — Scripts: RCSA | Build the code that supports the LLM work |
+| 6 | F6 — Assets: RCSA | Create the templates that define output format (completes Skill 2) |
 
 ---
 
