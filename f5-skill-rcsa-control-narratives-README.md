@@ -12,7 +12,7 @@
 | Feature Branch    | f5-skill.md-rcsa-control-narratives                                                                                                                                     |
 | Created           | 2026-04-02                                                                                                                                                              |
 | Status            | Draft                                                                                                                                                                   |
-| Owner             | Whitney Robinson (PM), Sheila Green, Molly Lowell                                                                                                                       |
+| Owner             | Molly Lowell                                                                                                                      |
 | Demo Day Deadline | May 7, 2026                                                                                                                                                             |
 | Input             | User provides artifact index (JSON), test catalog (JSON), and control library (JSON). Scripts parse these inputs and pass structured evidence to the LLM for reasoning. |
 
