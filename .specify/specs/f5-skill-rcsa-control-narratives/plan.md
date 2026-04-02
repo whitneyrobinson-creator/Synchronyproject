@@ -1,7 +1,7 @@
 # Implementation Plan: RCSA Control Narrative Generation
 
 **Branch**: `f5-skill-rcsa-control-narratives` | **Date**: 2026-04-02 | **Spec**: `../spec.md`
-**Input**: Feature specification from `/specs/f5-skill-rcsa-control-narratives/spec.md`
+**Input**: Feature specification from `.specify/specs/f5-skill-rcsa-control-narratives/`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
