@@ -292,11 +292,11 @@ If LLM fails:
 
 | ID | Metric | Target |
 |----|--------|--------|
-| SC-F5-001 | Input validation accuracy | 100% |
-| SC-F5-002 | Citation resolution | ≥ 90% |
-| SC-F5-003 | Fabricated citations | ≤ 5% |
-| SC-F5-004 | Output generation | 100% success |
-| SC-F5-005 | Graceful degradation | Works without LLM |
+| SC-F5-001 | Input validation correctly identifies missing or malformed required inputs | ≥ 95% |
+| SC-F5-002 | Citation resolution accuracy (citations correctly match real artifacts) | ≥ 90% |
+| SC-F5-003 | Fabricated or invalid citations in output | ≤ 5% |
+| SC-F5-004 | Successful generation of required output files under valid input conditions | ≥ 95% |
+| SC-F5-005 | Graceful degradation behavior when LLM fails (system still produces structured output) | Demonstrated in all failure test scenarios |
 
 ---
 
