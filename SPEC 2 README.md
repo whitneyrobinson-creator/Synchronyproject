@@ -23,7 +23,7 @@ It is designed primarily for Synchrony's documentation teams who need to generat
 
 ### User Story 1 — Generate a Data Dictionary (Priority: P1)
 
-A documentation team member provides a schema file (JSON, YAML, or DDL). The skillset processes the schema and returns a complete data dictionary containing field-level metadata — name, type, constraints, plain-language description, citation, confidence score, and last_verified timestamp — along with a QA report flagging any items needing clarification.
+A documentation team member provides a schema file (JSON). The skillset processes the schema and returns a complete data dictionary containing field-level metadata — name, type, constraints, plain-language description, citation, confidence score, and last_verified timestamp — along with a QA report flagging any items needing clarification.
 
 **Why this priority**: This is one of two core end-to-end workflows required for the May 7th demo. A working P1 is a shippable MVP that demonstrates the full artifact-to-documentation pipeline.
 
@@ -31,7 +31,7 @@ A documentation team member provides a schema file (JSON, YAML, or DDL). The ski
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid schema file (JSON, YAML, or DDL), **When** the user invokes the skill, **Then** the system returns a `data_dictionary.md` (or `.csv`) with all required fields: field_name, type, nullable, constraints/enums, description, source_path(s), evidence_refs, confidence, and last_verified.
+1. **Given** a valid schema file (JSON), **When** the user invokes the skill, **Then** the system returns a `data_dictionary.md` (or `.csv`) with all required fields: field_name, type, nullable, constraints/enums, description, source_path(s), evidence_refs, confidence, and last_verified.
 2. **Given** a valid schema file, **When** the data dictionary is generated, **Then** every field description includes a citation to the source schema artifact.
 3. **Given** valid inputs, **When** the skill completes, **Then** the system also produces a `qa_report.md` showing coverage stats and any [NEEDS CLARIFICATION] items.
 
@@ -128,7 +128,7 @@ A documentation team member provides a current schema and a prior version. The s
 
 ### Edge Cases
 
-- **Invalid schema format**: System rejects the input with a clear error message listing valid formats (JSON, YAML, DDL) and allows the user to correct without restarting.
+- **Invalid schema format**: System rejects the input with a clear error message listing valid formats (JSON) and allows the user to correct without restarting.
 - **Empty schema / no fields**: System returns an error explaining that the schema contains no extractable fields, rather than producing an empty data dictionary.
 - **Missing optional inputs (glossary, profiling stats, prior version)**: System proceeds without them; output notes which optional inputs were not provided and which defaults were applied.
 - **Control with no evidence**: System explicitly flags a "Gap" statement for that control — never implies compliance without proof.
@@ -185,7 +185,7 @@ A documentation team member provides a current schema and a prior version. The s
 
 | FR | Description | Owner |
 |---|---|---|
-| **FR-001** | System MUST accept schema extracts (JSON, YAML, or DDL) as input for data dictionary generation | Script |
+| **FR-001** | System MUST accept schema extracts (JSON) as input for data dictionary generation | Script |
 | **FR-002** | System MUST accept artifact indexes (JSON) listing all discovered files, functions, and classes in a repository | Script |
 | **FR-003** | System MUST accept test catalogs (JSON) listing test names, file paths, and pass/fail status | Script |
 | **FR-004** | System MUST accept a control library (JSON) defining controls, objectives, and expected evidence types | Script |
@@ -224,7 +224,7 @@ A documentation team member provides a current schema and a prior version. The s
 
 #### P1 — Demo Day (Stories 1 & 2)
 
-- **Schema Extract** — A JSON, YAML, or DDL file containing database/table field definitions (column names, types, constraints, nullability). Primary input for data dictionary generation.
+- **Schema Extract** — A JSON file containing database/table field definitions (column names, types, constraints, nullability). Primary input for data dictionary generation.
 
 - **Artifact Index** — A JSON file listing all discovered files, functions, and classes in a repository. Primary input for RCSA control narrative generation.
 
