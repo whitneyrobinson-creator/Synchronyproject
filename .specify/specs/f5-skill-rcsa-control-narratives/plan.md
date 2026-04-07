@@ -14,14 +14,14 @@ Build the SKILL.md agent instruction file that guides the LLM to generate citati
 ## Technical Context
 
 **Language/Version**: Natural language (Markdown) — SKILL.md is a prompt instruction file, not executable code  
-**Primary Dependencies**: Claude Agent Skills runtime environment. Note: F6 (Scripts) and F4 (Assets) are downstream features that will be built to support and formalize what F5 defines. During F5 development, output structure is defined inline and sample inputs are created manually for testing.
+**Primary Dependencies**: Claude Agent Skills runtime environment. Note: F6 (Scripts) and F4 (Assets) are downstream features that will be built to support and formalize what F5 defines. During F5 development, output structure is defined inline and sample inputs are created manually for testing  
 **Storage**: N/A — SKILL.md is a static instruction file; output files (`rcsa_control_narratives.md`, `validation_report.md`) are written by F6 (Scripts)  
 **Testing**: Manual validation — run SKILL.md with sample mapped evidence inputs and verify output against acceptance scenarios in spec; automated structural validation handled by F6 (Scripts)  
 **Target Platform**: Claude Agent Skills (Cursor IDE integration)
 
 **Project Type**: Agent skill definition (prompt engineering / instruction authoring)  
 **Performance Goals**: LLM generates complete output for all 4 controls in a single invocation; ≥ 90% structural consistency across repeated runs  
-**Constraints**: SKILL.md must instruct the LLM to use only provided evidence (no external knowledge); must never imply compliance without proof (Constitution Principle 1); must define output structure inline (later formalized into templates by F4) 
+**Constraints**: SKILL.md must instruct the LLM to use only provided evidence (no external knowledge); must never imply compliance without proof (Constitution Principle 1); must define output structure inline (later formalized into templates by F4)  
 **Scale/Scope**: Single SKILL.md file covering 4 compliance controls; designed for demo-scale repositories (not enterprise-scale)
 
 ---
