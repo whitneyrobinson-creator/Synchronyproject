@@ -14,7 +14,7 @@ Build the SKILL.md agent instruction file that guides the LLM to generate citati
 ## Technical Context
 
 **Language/Version**: Natural language (Markdown) — SKILL.md is a prompt instruction file, not executable code  
-**Primary Dependencies**: Claude Agent Skills runtime environment; output templates from F4 (Assets); mapped evidence input from F6 (Scripts)  
+**Primary Dependencies**: Claude Agent Skills runtime environment. Note: F6 (Scripts) and F4 (Assets) are downstream features that will be built to support and formalize what F5 defines. During F5 development, output structure is defined inline and sample inputs are created manually for testing.
 **Storage**: N/A — SKILL.md is a static instruction file; output files (`rcsa_control_narratives.md`, `validation_report.md`) are written by F6 (Scripts)  
 **Testing**: Manual validation — run SKILL.md with sample mapped evidence inputs and verify output against acceptance scenarios in spec; automated structural validation handled by F6 (Scripts)  
 **Target Platform**: Claude Agent Skills (Cursor IDE integration)
