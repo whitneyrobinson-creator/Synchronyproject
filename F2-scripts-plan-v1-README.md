@@ -92,37 +92,32 @@ The pipeline consists of **6 single-purpose Python scripts** that communicate vi
 ### Documentation (this feature)
 
     specs/f2-scripts-data-dictionary/
-    ├── spec.md              # Feature-level spec (already written)
-    └── plan.md              # This plan
+    ├── plan.md              # This file
+    ├── research.md          # Phase 0 — Python stdlib patterns, JSON validation approaches, file-based pipeline design
+    ├── data-model.md        # Phase 1 — intermediate JSON schemas, merged field structure, placeholder conventions
+    ├── quickstart.md        # Phase 1 — how to run, test, and debug the 6-script pipeline
+    ├── contracts/           # Phase 1 — input/output agreements between F2 → F1 and F2 → F3
+    └── tasks.md             # Phase 2 — implementation checklist (created separately)
 
 ### Source Code (repository root)
 
     skills/
     └── data-dictionary/
-        ├── SKILL.md                          ← F1 (LLM instructions)
-        ├── scripts/                          ← F2 (this plan's deliverables)
-        │   ├── validate_input.py             ← Pre-LLM Step 1: validates user's JSON schema
-        │   ├── extract_fields.py             ← Pre-LLM Step 2: extracts field metadata for LLM
-        │   ├── attach_citations.py           ← Post-LLM Step 1: validates LLM output + merges everything
-        │   ├── add_timestamps.py             ← Post-LLM Step 2: stamps every field with last_verified
-        │   ├── assemble_output.py            ← Post-LLM Step 3: fills template → data_dictionary.md
-        │   └── generate_qa_report.py         ← Post-LLM Step 4: produces qa_report.md
-        ├── assets/                           ← F3 (owned by F3, read by F2)
-        │   ├── data_dictionary_template.md   ← Template for final data dictionary
-        │   ├── qa_report_template.md         ← Template for QA report
-        │   └── sample_schema.json            ← Test input (UCI Credit Card, 25 fields)
-        └── output/                           ← Everything the skill produces
-            ├── data_dictionary.md            ← FINAL DELIVERABLE — the data dictionary
-            ├── qa_report.md                  ← FINAL DELIVERABLE — the QA report
-            └── intermediate/                 ← Script-to-script handoff files (debugging artifacts)
-                ├── user_input.json           ← User's uploaded schema (copied here by SKILL.md)
-                ├── validated_schema.json     ← Created by validate_input.py
-                ├── extracted_fields.json     ← Created by extract_fields.py
-                ├── extraction_warnings.json  ← Created by extract_fields.py (only if duplicates found)
-                ├── llm_output.json           ← Created by F1 (LLM)
-                ├── merged_fields.json        ← Created by attach_citations.py
-                └── timestamped_fields.json   ← Created by add_timestamps.py
+        └── scripts/                          # F2 deliverables — this plan's 6 Python scripts
+            ├── validate_input.py             # Pre-LLM Step 1: validates user's JSON schema
+            ├── extract_fields.py             # Pre-LLM Step 2: extracts field metadata for LLM (security boundary)
+            ├── attach_citations.py           # Post-LLM Step 1: validates LLM output, merges with extracted metadata
+            ├── add_timestamps.py             # Post-LLM Step 2: stamps every field with last_verified (ISO 8601)
+            ├── assemble_output.py            # Post-LLM Step 3: fills F3 template → data_dictionary.md
+            └── generate_qa_report.py         # Post-LLM Step 4: produces qa_report.md with coverage stats
 
+**Structure Decision**: F2's deliverables are 6 Python scripts in `skills/data-dictionary/scripts/`.
+This plan only shows what F2 owns — the scripts directory. Other components in the same skill folder
+are owned by other features: `SKILL.md` (F1), `assets/` (F3). The `output/` directory and its
+`intermediate/` subdirectory are created at runtime by F2 scripts via `os.makedirs()` — they are
+not checked into the repository. This keeps the Source Code section focused on F2's actual
+deliverables (Constitution Principle 3: Simplicity First) and is consistent with how F1 and F3
+plans show only their own files.
 ### Who Owns What
 
 | Folder/File | Owner | F2's Relationship |
