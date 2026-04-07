@@ -21,7 +21,7 @@ Build the SKILL.md agent instruction file that guides the LLM to generate citati
 
 **Project Type**: Agent skill definition (prompt engineering / instruction authoring)  
 **Performance Goals**: LLM generates complete output for all 4 controls in a single invocation; ≥ 90% structural consistency across repeated runs  
-**Constraints**: SKILL.md must instruct the LLM to use only provided evidence (no external knowledge); must never imply compliance without proof (Constitution Principle 1); must follow output templates from F4  
+**Constraints**: SKILL.md must instruct the LLM to use only provided evidence (no external knowledge); must never imply compliance without proof (Constitution Principle 1); must define output structure inline (later formalized into templates by F4) 
 **Scale/Scope**: Single SKILL.md file covering 4 compliance controls; designed for demo-scale repositories (not enterprise-scale)
 
 ---
