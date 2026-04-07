@@ -131,7 +131,7 @@ The LLM structures its output according to the templates defined in assets (F4),
 - The LLM receives pre-processed, structured mapped evidence — not raw repository files. Input preparation is handled by F6 (Scripts).
 - The deterministic pipeline (F6 — Scripts) handles all input validation and evidence mapping before the LLM is invoked.
 - The LLM does not have direct access to the repository — it works only with the evidence provided to it.
-- Output templates (F4 — Assets) are available and finalized before SKILL.md development begins.
+- The SKILL.md defines the expected output structure (summary table, per-control narratives, gap flags). F4 (Assets) will later formalize these into reusable templates based on what F5 establishes. During F5 development, output structure is defined inline within the SKILL.md instructions. 
 - The LLM may hallucinate citations; post-processing validation (F6 — Scripts) catches and corrects these after the LLM generates output.
 - Graceful degradation when the LLM fails is handled by F6 (Scripts), not by the SKILL.md itself.
 - The SKILL.md will be used within the Claude Agent Skills runtime environment.
