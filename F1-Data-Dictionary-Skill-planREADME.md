@@ -79,36 +79,27 @@ Quality and calibration scored manually by team; completeness, coverage, and fla
 
 ---
 
-## Section 4: Project Structure
+## Project Structure
 
-### Documentation
+### Documentation (this feature)
 
-```text
-specs/f1-skill.md-data-dictionary/
-├── spec.md              ← Feature-level spec (already written)
-└── plan.md              ← This plan
-```
+    specs/f1-skill.md-data-dictionary/
+    ├── plan.md              # This file
+    ├── research.md          # Phase 0 — prompt engineering patterns, confidence calibration techniques, few-shot example design
+    ├── data-model.md        # Phase 1 — input metadata schema, 5-field output structure, confidence rubric definitions
+    ├── quickstart.md        # Phase 1 — how to run, test, and iterate on the SKILL.md
+    ├── contracts/           # Phase 1 — input/output agreements between F1 → F2 (metadata in, JSON out)
+    └── tasks.md             # Phase 2 — implementation checklist (created separately)
 
-### Source Code
+### Source Code (repository root)
 
-```text
-skills/
-└── data-dictionary/
-    └── SKILL.md          ← ⭐ Main deliverable — LLM instruction file
-                             (3 worked examples embedded directly)
-```
+    skills/                                  # Lives at repository root, NOT inside specs/
+    └── data-dictionary/
+        └── SKILL.md                         # Main deliverable — LLM instruction file with confidence rubric,
+                                             # signal-strength definitions, and 3 embedded worked examples
+                                             # (High/Medium/Low confidence)
 
-**What F1 owns:**
-- `SKILL.md` — The only file F1 creates. Self-contained instruction document with all rules, rubrics, and worked examples inside it.
-
-**What F1 uses but doesn't own:**
-- Field metadata (JSON) — Passed to the SKILL.md at runtime by F2. F1 doesn't control where this lives or how it's created.
-- `spec.md` — Referenced during development, not modified.
-
-**What F1 doesn't touch:**
-- Scripts, templates, and output files — all owned by F2/F3.
-
-**Note:** This folder structure is proposed. Teammates building F2 and F3 may adjust the broader project layout as they create their own plans.
+**Structure Decision**: Single `SKILL.md` file inside `skills/data-dictionary/` at the repository root. No subdirectories needed — F1's entire deliverable is one self-contained Markdown instruction file with all rules, rubrics, and worked examples embedded directly. This is the simplest structure that works (Constitution Principle 3: Simplicity First). F2 scripts invoke this skill at runtime and pass it structured field metadata as JSON. F1 has no `tests/` directory — validation of the SKILL.md happens through baseline testing against the UCI Credit Card dataset (SC-F1-001 through SC-F1-006), with automated checks owned by F2's scripts and manual quality scoring done by the team.
 
 ---
 
