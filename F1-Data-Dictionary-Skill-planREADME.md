@@ -1,9 +1,13 @@
 # F1 — SKILL.md: Data Dictionary Generation — Plan
 
 **Feature Branch**: `f1-skill.md-data-dictionary`
+
 **Created**: 2026-04-03
+
 **Status**: Draft
-**Owner**: Whitney Robinson (PM), Sheila Green, Molly Lowell
+
+**Owner**: Sheila Green (PM), Whitney Robinson, Molly Lowell
+
 **Demo Day Deadline**: May 7, 2026
 
 ---
@@ -12,15 +16,18 @@
 
 F1 is a SKILL.md file — a self-contained LLM instruction document that tells Claude how to generate data dictionary entries from structured field metadata.
 
-**What F1 does:** Receives a JSON array of field metadata from F2 (field names, types, constraints, comments, enums). For each field, it generates a plain-language description (≤25 words), a confidence score (High/Medium/Low), evidence citations explaining the score, and a clarification flag for fields needing human review.
+**What F1 does:** Receives a JSON object from F2 containing the table name and an array of field metadata (field names, types, constraints, comments, enums). For each field, it generates a plain-language description (≤25 words), a confidence score (High/Medium/Low), evidence citations explaining the score, and a clarification flag for fields needing human review.
 
-**What F1 produces:** A JSON array of objects — one per input field — each containing 5 fields: `field_name`, `description`, `confidence`, `evidence_refs`, `clarification_flag`.
+**What F1 produces:** A JSON array of objects — one per input field — each containing 5 fields: `field_name`, `description`, `confidence`, `evidence_refs`, `clarification_flag`. If the SKILL.md can't process a field, it still returns the standard 5-field object with Low confidence and a clarification flag — no special error format.
 
 **What F1 does NOT do:** Parse schema files (F2), assemble final output documents (F2), or format templates (F3). F1 only reasons over metadata it receives and returns structured output.
 
 **Key design decisions:**
+
 - Three worked examples (High/Medium/Low confidence) are embedded directly in the SKILL.md
+
 - Confidence scoring follows a defined rubric based on signal strength (not LLM intuition)
+
 - The SKILL.md is batch-size agnostic — instructions don't change regardless of field count
 
 **Demo day target:** Run the SKILL.md against the UCI Credit Card dataset (25 fields) and demonstrate accurate, consistent, audit-ready output.
@@ -36,14 +43,24 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 **Storage**: File-based — SKILL.md stored in `skills/data-dictionary/`. LLM outputs returned as structured JSON (format pending F2 confirmation). Final assembled outputs (.md) are F2/F3's responsibility.
 
 **Testing**: Baseline testing by running SKILL.md against UCI Credit Card dataset (25 fields). Six success criteria measured:
+
 - **SC-F1-001** — Completeness: LLM produces all 5 output fields for every input field
+
 - **SC-F1-002** — Description Quality: Descriptions are understandable, accurate, ≤25 words
+
 - **SC-F1-003** — Confidence Calibration: High/Medium/Low scores match actual signal strength
+
 - **SC-F1-004** — Citation Coverage: Every description includes evidence_refs with reasoning
+
 - **SC-F1-005** — Clarification Flag Accuracy: All Low confidence fields flagged [NEEDS CLARIFICATION]
+
 - **SC-F1-006** — Consistency: Same input produces structurally similar output across runs
 
 Quality and calibration scored manually by team; completeness, coverage, and flag accuracy checked via automated scripts (owned by F2).
+
+F2 validates every SKILL.md response against 13 rules (see data-model.md Section 5). Critical failures trigger automatic retry (max 3 attempts). Non-critical issues are flagged for manual review.
+
+Iteration guidance for improving SKILL.md output quality is documented in quickstart.md, including a 4-step debugging order and common failure modes.
 
 **Target Platform**: Claude Agent Skills runtime — local execution, no cloud deployment for demo day.
 
@@ -52,9 +69,13 @@ Quality and calibration scored manually by team; completeness, coverage, and fla
 **Performance Goals**: Accuracy over speed (Constitution Principle 1). No latency SLA for demo day. The SKILL.md must produce correct output for all fields received in a single pass, regardless of count.
 
 **Constraints**:
+
 - ≤25 words per description (FR-007)
+
 - Only metadata sent to LLM — no raw PII, datasets, or credentials (Constitution Never-Ever Rules)
+
 - File-based I/O only
+
 - No microservices, no UI, no cloud deployment (Constitution Principle 3)
 
 **Scale/Scope**: Demo day: 25 fields (UCI Credit Card dataset). The SKILL.md instructions are batch-size agnostic — if F2 sends 500 fields or 10, the instructions don't change. Batching logic for large schemas is F2's responsibility.
@@ -79,16 +100,18 @@ Quality and calibration scored manually by team; completeness, coverage, and fla
 
 ---
 
-## Project Structure
+## Section 4: Project Structure
 
 ### Documentation (this feature)
 
     specs/f1-skill.md-data-dictionary/
     ├── plan.md              # This file
-    ├── research.md          # Phase 0 — prompt engineering patterns, confidence calibration techniques, few-shot example design
+    ├── research.md          # Phase 0 — prompt engineering patterns, alternative approaches considered, existing tools landscape, testing strategy
     ├── data-model.md        # Phase 1 — input metadata schema, 5-field output structure, confidence rubric definitions
     ├── quickstart.md        # Phase 1 — how to run, test, and iterate on the SKILL.md
-    ├── contracts/           # Phase 1 — input/output agreements between F1 → F2 (metadata in, JSON out)
+    ├── contracts/
+    │   ├── input-contract.md    # What F2 sends to the SKILL.md
+    │   └── output-contract.md   # What the SKILL.md sends back to F2
     └── tasks.md             # Phase 2 — implementation checklist (created separately)
 
 ### Source Code (repository root)
@@ -112,3 +135,7 @@ Quality and calibration scored manually by team; completeness, coverage, and fla
 | 3 | Conflict detection for disagreeing signals | Prevents confident-but-wrong descriptions when metadata contradicts itself. Real-world schemas commonly have mismatched names and comments. Red teaming after skill creation verifies this works. | Feature spec Scenario 2.4, Constitution Principle 4 (Audit-Ready by Default) |
 
 **All three are justified by either the constitution or the feature spec. None are gold-plating.**
+
+---
+
+*This document is the central plan for F1. For detailed schemas, see data-model.md. For contracts, see contracts/. For testing and iteration guidance, see quickstart.md. For research rationale, see research.md.*
