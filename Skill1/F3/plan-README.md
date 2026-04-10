@@ -27,7 +27,7 @@ The QA report template (`qa_report_template.md`) defines the following sections.
 |---------|-----------------|-----------------|
 | Report Header | Table name, field count, run timestamp, pipeline version | Yes |
 | 1. Coverage Statistics | How many fields got descriptions, percentage, placeholder count | Yes |
-| 2. Confidence Distribution | Counts and percentages of High, Medium, Low, and N/A confidence fields | Yes |
+| 2. Confidence Distribution | Counts and percentages of `"High"`, `"Medium"`, `"Low"`, and `"N/A"` confidence fields | Yes |
 | 3. Fields Requiring Clarification | List of fields where `clarification_flag` is `true` | Yes |
 | 4. Merge Corrections | Table of corrections applied by `attach_citations.py` | Only if corrections exist |
 | 5. Warnings | Warnings from `extract_fields.py`, LLM output validation issues, missing LLM output | Only if warnings exist |
@@ -52,14 +52,12 @@ The QA report template (`qa_report_template.md`) defines the following sections.
 - SC-F3-002 — Does the gold standard example follow the template's structure exactly?
 - SC-F3-003 — Does the sample schema include a mix of easy, medium, and hard fields?
 - SC-F3-004 — Are the gold standard descriptions actually correct (verified against the Kaggle dataset documentation)?
-- SC-F3-005 — Do the numbers in the QA report match the data dictionary? (e.g., if 3 fields are Low confidence in the dictionary, the QA report should also say 3)
+- SC-F3-005 — Do the numbers in the QA report match the data dictionary? (e.g., if 3 fields are `"Low"` confidence in the dictionary, the QA report should also say 3)
 - SC-F3-006 — Can F2's scripts actually read and use these files without errors? (Blocked until F2 scripts are built)
 
 **Target Platform**: Runs locally on your computer during demo day. Claude Agent Skills reads the files from disk. Nothing is deployed to the internet or a server.
 
 **Project Type**: Static assets — files that are created once by the team and don't change while the pipeline runs. The pipeline reads them as-is. Think of them as reference documents the system consults.
-
-**Performance Goals**: Not applicable for speed — these are files in a folder, not running software. The only goal is accuracy: the content must be correct and match the specs.
 
 **Constraints** (rules F3 must follow):
 - Templates must define the exact same columns and sections that F1 and F2 expect to produce — if there's a mismatch, the pipeline breaks
@@ -68,6 +66,7 @@ The QA report template (`qa_report_template.md`) defines the following sections.
 - No actual data values from the UCI dataset — only metadata (field names, types, constraints), never the real numbers or personal information
 - JSON format only for demo day — YAML and DDL (SQL-based schema format) are future extensions, not supported now
 - **Missing template = hard stop.** If F2's `assemble_output.py` or `generate_qa_report.py` can't find its template file, the script stops with a clear error message. This is a setup error, not a graceful degradation scenario. No fallback templates, no raw JSON dump. See contracts.md (Contract 2: F3 → F2) for the full agreement.
+- **All templates must exist at their defined paths before pipeline execution.** If a template is missing or renamed, F2's `assemble_output.py` (Step 5) will halt with an error. Template file names and paths are part of the contract between F2 and F3 — changes require updating both plans.
 
 **Scale/Scope**: 6 asset files covering 25 fields from the UCI Credit Card dataset. That's the full scope for demo day. After handoff, Synchrony creates their own versions of the sample schema and gold standard using their real data — but the templates stay the same.
 
@@ -78,7 +77,7 @@ The gold standard connects to two other files: the QA report gold standard (stat
 1. Make the edit in `example_data_dictionary.md`
 2. Check if the confidence level or clarification_flag changed → update `example_qa_report.md` if so
 3. Check if the edited field is one of the 3 worked examples in SKILL.md → update SKILL.md if so
-4. Verify the numbers add up (High + Medium + Low + N/A = 25)
+4. Verify the numbers add up (`"High"` + `"Medium"` + `"Low"` + `"N/A"` = 25)
 5. Team review and sign-off
 
 ---
@@ -90,7 +89,7 @@ The gold standard connects to two other files: the QA report gold standard (stat
 | Constitution Principle | F3 Compliance | How |
 |---|---|---|
 | **Principle 1: Accuracy Over Speed** | ✅ Pass | Gold standard examples are manually verified against Kaggle documentation before use. Templates include `confidence` and `evidence_refs` columns to ensure every generated description is traceable. No shortcuts — team reviews and signs off on every asset (Definition of Done). |
-| **Principle 2: Graceful Degradation** | ✅ Pass | F3 assets are static files — they don't depend on the LLM being online. If Claude goes down, the templates and sample schema still exist and can be used manually. The gold standard examples also serve as a "what correct output looks like" reference if the team needs to write descriptions by hand during an outage. **Note:** A missing template is NOT a graceful degradation scenario — it's a setup error. F2 stops with a clear error message. |
+| **Principle 2: Graceful Degradation** | ✅ Pass | F3 assets are static files — they don't depend on the LLM being online. If Claude goes down, the templates and sample schema still exist and can be used manually. The gold standard examples also serve as a "what correct output looks like" reference if the team needs to write descriptions by hand during an outage. **Note:** A missing template is NOT a graceful degradation scenario — it's a setup error. F2 stops with a clear error message. Missing templates cause a hard stop with a clear error message. Graceful degradation applies to LLM failures (handled by F2), not to missing assets — a missing template is a configuration error, not a runtime failure. |
 | **Principle 3: Simplicity First** | ✅ Pass | F3 is the simplest feature in the project: 6 files in a folder. No code, no dependencies, no services. Markdown and JSON only. |
 | **Principle 4: Audit-Ready by Default** | ✅ Pass | Templates are designed with audit reviewers in mind — the data dictionary template includes `confidence`, `evidence_refs`, and `clarification_flag` columns so every entry can be traced back to its evidence. The QA report template includes coverage statistics and flagged items. |
 | **Never-Ever Rules** | ✅ Pass | `sample_schema.json` contains only field metadata (names, types, constraints) — no actual data values, no PII, no API keys, no credentials. Enum values like `[1, 2]` for the SEX field are structural metadata describing allowed values, not personal data. No raw dataset content is included in any F3 asset. |
@@ -111,7 +110,7 @@ The gold standard connects to two other files: the QA report gold standard (stat
     ├── research.md          # Phase 0 — decisions, reasoning, and findings from the planning process
     ├── data-model.md        # Phase 1 — structures for templates, sample schema, and gold standard
     ├── quickstart.md        # Phase 1 — how to use, update, and validate F3 assets
-    ├── contracts/           # Phase 1 — input/output agreements between F3 → F1 and F3 → F2
+    ├── contracts.md         # Phase 1 — input/output agreements between F3 → F1 and F3 → F2
     └── tasks.md             # Phase 2 — implementation checklist (created separately)
 
 ### Source Code (repository root)
@@ -125,6 +124,8 @@ The gold standard connects to two other files: the QA report gold standard (stat
     └── glossary_template.json               # Placeholder for P3 glossary feature (deferred — not required for demo day)
 
 **Structure Decision**: Single flat `assets/` directory at the repository root. No subdirectories needed — F3 has only 6 files, all at the same level. This is the simplest structure that works (Constitution Principle 3: Simplicity First). F2 scripts reference these files by path (e.g., `assets/data_dictionary_template.md`). F3 has no `tests/` directory — validation of these assets happens through F2's integration tests (SC-F3-006). If Synchrony adds more asset types post-handoff, they can introduce subdirectories at that point.
+
+For the full repository layout including all three features, see the project spec.
 
 ---
 
