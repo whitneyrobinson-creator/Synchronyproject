@@ -14,7 +14,7 @@ F2 is 6 Python scripts that form a pipeline. Raw schema goes in, data dictionary
 
 | Step | Script | What It Does |
 |------|--------|--------------|
-| 1 | `validate_input.py` | Checks the uploaded schema is valid JSON with the right structure. Rejects bad files early. |
+| 1 | `validate_input.py` | Checks the uploaded schema is valid JSON with the right structure (`table_name`, `source_file`, `fields`). Rejects bad files early. |
 | 2 | `extract_fields.py` | Pulls fields out of the schema. Creates a metadata record for each one (name, type, nullable, constraints, etc.). Logs warnings for edge cases like duplicates. |
 | 3 | `attach_citations.py` | Merges the LLM's descriptions with the extracted metadata. Validates the LLM's work. Fills placeholders if the LLM failed. Logs any corrections it makes. |
 | 4 | `add_timestamps.py` | Adds a `last_verified` timestamp to every field. |
@@ -140,7 +140,7 @@ Whether the LLM returns bad output 3 times or never responds at all, the result 
 ### How the Team Knows Something Went Wrong
 
 1. **Console message** — Printed immediately. Shows attempt count, failure reasons, and what action was taken.
-2. **QA Report (Run Summary section)** — Permanent record. The console message disappears when you close the terminal; the QA report stays.
+2. **QA Report (Processing Notes section)** — Permanent record. The console message disappears when you close the terminal; the QA report stays.
 3. **Every field's `merge_status`** — All set to `"placeholder"`. Self-documenting.
 
 ### What Does NOT Happen
@@ -174,4 +174,3 @@ The Constitution and sandbox constraints made most of these decisions for us.
 | Python | Constitution Section 2, sandbox requirement |
 | Graceful degradation | Constitution Principle 2, Feature Spec US-6 |
 | Corrections always logged | Audit trail requirement, QA report design |
-
