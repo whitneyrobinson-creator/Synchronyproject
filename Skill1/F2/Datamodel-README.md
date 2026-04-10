@@ -18,12 +18,12 @@ Every script, what it reads, and what it writes — in one place.
 
 | Script | Reads | Writes |
 |--------|-------|--------|
-| `validate_input.py` | `user_input.json` | `validated_schema.json` |
-| `extract_fields.py` | `validated_schema.json` | `extracted_fields.json` + `extraction_warnings.json` (conditional) |
-| `attach_citations.py` | `extracted_fields.json` + `llm_output.json` | `merged_fields.json` |
-| `add_timestamps.py` | `merged_fields.json` | `timestamped_fields.json` |
-| `assemble_output.py` | `timestamped_fields.json` + F3 template | `data_dictionary.md` |
-| `generate_qa_report.py` | `timestamped_fields.json` + `extraction_warnings.json` (if exists) | `qa_report.md` |
+| `validate_input.py` (Step 1) | `user_input.json` | `validated_schema.json` |
+| `extract_fields.py` (Step 2) | `validated_schema.json` | `extracted_fields.json` + `extraction_warnings.json` (conditional) |
+| `attach_citations.py` (Step 3) | `extracted_fields.json` + `llm_output.json` | `merged_fields.json` |
+| `add_timestamps.py` (Step 4) | `merged_fields.json` | `timestamped_fields.json` |
+| `assemble_output.py` (Step 5) | `timestamped_fields.json` + F3 template | `data_dictionary.md` |
+| `generate_qa_report.py` (Step 6) | `timestamped_fields.json` + `extraction_warnings.json` (if exists) | `qa_report.md` |
 
 All intermediate files live in `output/intermediate/`. Final deliverables live in `output/`.
 
@@ -45,7 +45,7 @@ As a field moves through the pipeline, it gains keys:
 
 ## 1. Input Schema (User → F2)
 
-This is the file the user uploads. For demo day, it's JSON. SKILL.md saves a copy as `user_input.json` in `output/intermediate/`.
+This is the file the user uploads via Claude. It is saved as `user_input.json` in `output/intermediate/`.
 
 ### Minimal Valid Schema
 
@@ -258,7 +258,7 @@ This is where extracted metadata and LLM output come together. Each field grows 
       "type": "clarification_flag_override",
       "original": false,
       "corrected": true,
-      "reason": "confidence is Low but clarification_flag was false — auto-corrected to true"
+      "reason": "confidence is \"Low\" but clarification_flag was false — auto-corrected to true"
     }
   ]
 }
@@ -277,7 +277,7 @@ This is where extracted metadata and LLM output come together. Each field grows 
   "schema_comments": "Credit limit in NT dollars",
   "table_name": "credit_card_clients",
   "description": "[LLM did not return a description]",
-  "confidence": "None",
+  "confidence": "N/A",
   "evidence_refs": ["No evidence available — LLM did not process this field"],
   "clarification_flag": true,
   "merge_status": "placeholder",
@@ -298,7 +298,7 @@ This is where extracted metadata and LLM output come together. Each field grows 
 | `schema_comments` | string or null | Extraction | — |
 | `table_name` | string | Extraction | — |
 | `description` | string | LLM or placeholder | — |
-| `confidence` | string | LLM or `"None"` | `"High"`, `"Medium"`, `"Low"`, or `"None"` |
+| `confidence` | string | LLM or `"N/A"` | `"High"`, `"Medium"`, `"Low"`, or `"N/A"` |
 | `evidence_refs` | array of strings | LLM or placeholder | Always an array, even with one item |
 | `clarification_flag` | boolean | LLM or `true` | F2 can override `false` → `true`, never the reverse |
 | `merge_status` | string | `attach_citations.py` | `"matched"` or `"placeholder"` |
@@ -355,13 +355,13 @@ When the LLM fails to describe a field, `attach_citations.py` fills these exact 
 | Field | Placeholder Value | Type |
 |-------|------------------|------|
 | `description` | `"[LLM did not return a description]"` | string |
-| `confidence` | `"None"` | string |
+| `confidence` | `"N/A"` | string |
 | `evidence_refs` | `["No evidence available — LLM did not process this field"]` | array (single item) |
 | `clarification_flag` | `true` | boolean |
 | `merge_status` | `"placeholder"` | string |
 | `corrections` | `[]` | array (empty) |
 
-**The rule:** Types never change between normal and placeholder values. `evidence_refs` is always an array. `confidence` is always a string. Downstream scripts process everything the same way — no "is this a placeholder?" checks needed.
+**The rule:** Types never change between normal and placeholder values. `evidence_refs` is always an array. `confidence` is always a string. The stored placeholder value `"N/A"` is the same string displayed in the QA report's Confidence Distribution section. Downstream scripts process everything the same way — no "is this a placeholder?" checks needed.
 
 ---
 
@@ -392,7 +392,7 @@ The quality report. `generate_qa_report.py` reads `timestamped_fields.json` (and
 |---|---------|--------------|-----------------|
 | — | Report Header | Table name, field count, run timestamp, pipeline version | Yes |
 | 1 | Coverage Statistics | Fields with descriptions, percentage, placeholder count | Yes |
-| 2 | Confidence Distribution | Counts and percentages of High, Medium, Low, and N/A confidence fields | Yes |
+| 2 | Confidence Distribution | Counts and percentages of `"High"`, `"Medium"`, `"Low"`, and `"N/A"` confidence fields | Yes |
 | 3 | Fields Requiring Clarification | Fields where `clarification_flag` is `true` | Yes |
 | 4 | Merge Corrections | Corrections applied by `attach_citations.py` | Only if corrections exist |
 | 5 | Warnings | Duplicate field warnings from `extract_fields.py`, LLM output validation issues, missing LLM output | Only if warnings exist |
@@ -411,10 +411,10 @@ A field "has a description" if its `merge_status` is `"matched"`. Placeholder fi
 ### Confidence Distribution Calculation
 
 ```
-High count + Medium count + Low count + N/A count = Total Fields
+"High" count + "Medium" count + "Low" count + "N/A" count = Total Fields
 ```
 
-A field's confidence is `"None"` (counted as N/A) if the LLM failed to process it. This sum must always equal the total field count. If it doesn't, something is wrong in the pipeline.
+A field's confidence is `"N/A"` if the LLM failed to process it. This sum must always equal the total field count. If it doesn't, something is wrong in the pipeline.
 
 ---
 
