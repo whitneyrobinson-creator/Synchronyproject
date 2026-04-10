@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RCSA Test Catalog",
+  "description": "Catalog of test files that serve as evidence for RCSA controls",
+  "type": "object",
+  "required": ["_meta", "tests"],
+  "additionalProperties": false,
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "required": ["scale", "note"],
+      "properties": {
+        "scale": { "type": "string", "enum": ["demo", "production"] },
+        "note": { "type": "string" }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "file_path", "file_type", "description", "controls_relevant"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^TST-\\d{3}$",
+            "description": "Unique identifier (e.g., TST-001)"
+          },
+          "file_path": {
+            "type": "string",
+            "pattern": "^(?!\\/)",
+            "description": "Relative file path — must not start with /"
+          },
+          "file_type": { "type": "string" },
+          "description": { "type": "string" },
+          "controls_relevant": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]{2,4}$"
+            },
+            "description": "Array of control IDs this test relates to (e.g., ['AC', 'CM'])"
+          }
+        }
+      }
+    }
+  }
+}
