@@ -16,7 +16,7 @@
 
 F1 is a SKILL.md file — a self-contained LLM instruction document that tells Claude how to generate data dictionary entries from structured field metadata.
 
-**What F1 does:** Receives a JSON object from F2 containing the table name and an array of field metadata (field names, types, constraints, comments, enums). For each field, it generates a plain-language description (≤25 words), a confidence score (High/Medium/Low), evidence citations explaining the score, and a clarification flag for fields needing human review.
+**What F1 does:** Receives a JSON object from F2 containing the table name and an array of field metadata (field names, types, nullable, constraints, schema_comments, enums). The user provides their schema as `user_input.json`. For each field, it generates a plain-language description (≤25 words), a confidence score (`"High"`, `"Medium"`, or `"Low"`), evidence citations explaining the score, and a clarification flag for fields needing human review.
 
 **What F1 produces:** A JSON array of objects — one per input field — each containing 5 fields: `field_name`, `description`, `confidence`, `evidence_refs`, `clarification_flag`. If the SKILL.md can't process a field, it still returns the standard 5-field object with Low confidence and a clarification flag — no special error format.
 
@@ -24,7 +24,7 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 **Key design decisions:**
 
-- Three worked examples (High/Medium/Low confidence) are embedded directly in the SKILL.md
+- Three worked examples (High/Medium/Low confidence) are embedded directly in the SKILL.md. These are derived from F3's gold standard (`assets/example_data_dictionary.md`). See F3's quickstart.md for the update process if examples change.
 
 - Confidence scoring follows a defined rubric based on signal strength (not LLM intuition)
 
@@ -40,7 +40,7 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 **Primary Dependencies**: Claude Agent Skills architecture (SKILL.md format); Claude LLM as the reasoning engine that interprets the instructions. No direct code dependencies for F1 itself.
 
-**Storage**: File-based — SKILL.md stored in `skills/data-dictionary/`. LLM outputs returned as structured JSON (format pending F2 confirmation). Final assembled outputs (.md) are F2/F3's responsibility.
+**Storage**: File-based — SKILL.md stored in `skills/data-dictionary/`. LLM outputs returned as structured JSON — a JSON array of 5-field objects (see Section 1). Written to `output/intermediate/llm_output.json`. Final assembled outputs (.md) are F2/F3's responsibility.
 
 **Testing**: Baseline testing by running SKILL.md against UCI Credit Card dataset (25 fields). Six success criteria measured:
 
@@ -48,7 +48,7 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 - **SC-F1-002** — Description Quality: Descriptions are understandable, accurate, ≤25 words
 
-- **SC-F1-003** — Confidence Calibration: High/Medium/Low scores match actual signal strength
+- **SC-F1-003** — Confidence Calibration: `"High"`, `"Medium"`, `"Low"` scores match actual signal strength
 
 - **SC-F1-004** — Citation Coverage: Every description includes evidence_refs with reasoning
 
@@ -56,9 +56,9 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 - **SC-F1-006** — Consistency: Same input produces structurally similar output across runs
 
-Quality and calibration scored manually by team; completeness, coverage, and flag accuracy checked via automated scripts (owned by F2).
+Quality and calibration scored manually by team; completeness, coverage, and flag accuracy checked via automated scripts (owned by F2 — primarily `attach_citations.py` and `generate_qa_report.py`).
 
-F2 validates every SKILL.md response against 13 rules (see data-model.md Section 5). Critical failures trigger automatic retry (max 3 attempts). Non-critical issues are flagged for manual review.
+F2 validates every SKILL.md response against a defined rule set (see F2 data-model.md Section 5). F2 owns retry logic — max 2 retries (3 total attempts). Critical failures trigger automatic retry. Non-critical issues are flagged for manual review.
 
 Iteration guidance for improving SKILL.md output quality is documented in quickstart.md, including a 4-step debugging order and common failure modes.
 
@@ -90,6 +90,7 @@ Iteration guidance for improving SKILL.md output quality is documented in quicks
 | **Graceful Degradation** | ✅ Compliant | If Claude is offline, F2 scripts still extract raw metadata. F1's SKILL.md simply doesn't run — no data is lost. |
 | **Simplicity First** | ✅ Compliant | Single Markdown file. No code dependencies, no database, no UI, no cloud. |
 | **Audit-Ready by Default** | ✅ Compliant | Every description includes evidence_refs tracing back to input signals. Confidence scores follow a defined rubric. Clarification flags direct reviewers to uncertain items. |
+| **Modularity** | ✅ Compliant | The SKILL.md is self-contained — it has no dependencies on other skills or external services. It can be updated independently without affecting F2's scripts or F3's assets. |
 | **Never send raw PII to LLM** | ✅ Compliant | F1 receives only metadata (field names, types, constraints). Actual data values are never sent. |
 | **Never send API keys or credentials** | ✅ Compliant | No credentials in SKILL.md or its inputs. |
 | **Never send full source code or raw datasets** | ✅ Compliant | Only structured field metadata is sent. |
@@ -123,6 +124,8 @@ Iteration guidance for improving SKILL.md output quality is documented in quicks
                                              # (High/Medium/Low confidence)
 
 **Structure Decision**: Single `SKILL.md` file inside `skills/data-dictionary/` at the repository root. No subdirectories needed — F1's entire deliverable is one self-contained Markdown instruction file with all rules, rubrics, and worked examples embedded directly. This is the simplest structure that works (Constitution Principle 3: Simplicity First). F2 scripts invoke this skill at runtime and pass it structured field metadata as JSON. F1 has no `tests/` directory — validation of the SKILL.md happens through baseline testing against the UCI Credit Card dataset (SC-F1-001 through SC-F1-006), with automated checks owned by F2's scripts and manual quality scoring done by the team.
+
+For the full repository layout including all three features, see the project spec.
 
 ---
 
