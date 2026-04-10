@@ -12,6 +12,37 @@ This file defines every data structure F2 works with — what each file looks li
 
 ---
 
+## Script Quick Reference
+
+Every script, what it reads, and what it writes — in one place.
+
+| Script | Reads | Writes |
+|--------|-------|--------|
+| `validate_input.py` | `user_input.json` | `validated_schema.json` |
+| `extract_fields.py` | `validated_schema.json` | `extracted_fields.json` + `extraction_warnings.json` (conditional) |
+| `attach_citations.py` | `extracted_fields.json` + `llm_output.json` | `merged_fields.json` |
+| `add_timestamps.py` | `merged_fields.json` | `timestamped_fields.json` |
+| `assemble_output.py` | `timestamped_fields.json` + F3 template | `data_dictionary.md` |
+| `generate_qa_report.py` | `timestamped_fields.json` + `extraction_warnings.json` (if exists) | `qa_report.md` |
+
+All intermediate files live in `output/intermediate/`. Final deliverables live in `output/`.
+
+---
+
+## Field Count Progression
+
+As a field moves through the pipeline, it gains keys:
+
+| Stage | File | Keys Per Field |
+|-------|------|---------------|
+| User Input | `user_input.json` | 1–6 (only `field_name` required) |
+| After Extraction | `extracted_fields.json` | 8 |
+| After LLM | `llm_output.json` | 5 (separate structure) |
+| After Merge | `merged_fields.json` | 14 |
+| After Timestamps | `timestamped_fields.json` | 15 |
+
+---
+
 ## 1. Input Schema (User → F2)
 
 This is the file the user uploads. For demo day, it's JSON. SKILL.md saves a copy as `user_input.json` in `output/intermediate/`.
@@ -313,45 +344,54 @@ This is the timestamp of when the pipeline ran, not when the field was created i
 
 ---
 
-## 7. Final Output — data_dictionary.md
+## 7. Placeholder Conventions
 
-The main deliverable. `assemble_output.py` reads `timestamped_fields.json` and fills in an F3 Markdown template.
+When the LLM fails to describe a field, `attach_citations.py` fills these exact values:
 
-### What Each Field Entry Contains
+| Field | Placeholder Value | Type |
+|-------|------------------|------|
+| `description` | `"[LLM did not return a description]"` | string |
+| `confidence` | `"None"` | string |
+| `evidence_refs` | `["No evidence available — LLM did not process this field"]` | array (single item) |
+| `clarification_flag` | `true` | boolean |
+| `merge_status` | `"placeholder"` | string |
+| `corrections` | `[]` | array (empty) |
 
-Each field in the data dictionary includes:
-
-- Field name
-- Table name
-- Data type
-- Nullable (yes/no)
-- Constraints
-- Enum values (if any)
-- Description (from LLM or placeholder)
-- Confidence level
-- Evidence references
-- Clarification flag (if flagged for review)
-- Source path (where the field came from)
-- Last verified timestamp
-
-The exact Markdown layout is defined by F3's template (`data_dictionary_template.md`). F2 just fills in the values.
+**The rule:** Types never change between normal and placeholder values. `evidence_refs` is always an array. `confidence` is always a string. Downstream scripts process everything the same way — no "is this a placeholder?" checks needed.
 
 ---
 
-## 8. Final Output — qa_report.md
+## 8. Final Output — data_dictionary.md
 
-The quality report. `generate_qa_report.py` reads `timestamped_fields.json` (and `extraction_warnings.json` if it exists) and produces stats about the run.
+The main deliverable. `assemble_output.py` reads `timestamped_fields.json` and fills in an F3 Markdown template.
+
+Each field entry includes:
+
+- Field name, table name, data type
+- Nullable, constraints, enum values
+- Description (from LLM or placeholder)
+- Confidence level and evidence references
+- Clarification flag (if flagged for review)
+- Source path and last verified timestamp
+
+The exact Markdown layout is defined by F3's template (`data_dictionary_template.md`). F2 fills in the values.
+
+---
+
+## 9. Final Output — qa_report.md
+
+The quality report. `generate_qa_report.py` reads `timestamped_fields.json` (and `extraction_warnings.json` if it exists).
 
 ### Sections
 
 | # | Section | What It Shows | Always Present? |
 |---|---------|--------------|-----------------|
 | 1 | Pipeline Metadata | Table name, field count, run timestamp | Yes |
-| 2 | Coverage Summary | How many fields got descriptions, percentage, how many are placeholders | Yes |
-| 3 | Flagged Fields | List of fields where `clarification_flag` is `true` | Yes |
-| 4 | Merge Corrections | Table of corrections applied by `attach_citations.py` | Only if corrections exist |
+| 2 | Coverage Summary | Fields with descriptions, percentage, placeholder count | Yes |
+| 3 | Flagged Fields | Fields where `clarification_flag` is `true` | Yes |
+| 4 | Merge Corrections | Corrections applied by `attach_citations.py` | Only if corrections exist |
 | 5 | Extraction Warnings | Duplicate field warnings from `extract_fields.py` | Only if `extraction_warnings.json` exists |
-| 6 | Run Summary | Overall status — clean run, partial coverage, or full failure | Yes |
+| 6 | Run Summary | Overall status — clean, partial, or failed | Yes |
 
 ### Coverage Calculation
 
@@ -363,33 +403,18 @@ A field "has a description" if its `merge_status` is `"matched"`. Placeholder fi
 
 ---
 
-## 9. Field Count Progression
-
-As a field moves through the pipeline, it gains keys:
-
-| Stage | File | Keys Per Field |
-|-------|------|---------------|
-| User Input | `user_input.json` | 1–6 (only `field_name` required) |
-| After Extraction | `extracted_fields.json` | 8 |
-| After LLM | `llm_output.json` | 5 (separate structure) |
-| After Merge | `merged_fields.json` | 14 |
-| After Timestamps | `timestamped_fields.json` | 15 |
-
----
-
 ## 10. Edge Cases
 
 | Scenario | What Happens |
 |----------|-------------|
-| **Empty fields array** | `validate_input.py` rejects it — fields array must have at least 1 item |
+| **Empty fields array** | `validate_input.py` rejects it |
 | **Missing `field_name`** | `validate_input.py` rejects it |
-| **Missing optional fields** (type, nullable, etc.) | `extract_fields.py` fills defaults (`"UNKNOWN"`, `true`, `[]`, `null`) |
-| **Duplicate field names** | `extract_fields.py` keeps all of them, writes `extraction_warnings.json`, uses position-based matching downstream |
-| **LLM skips some fields** | `attach_citations.py` fills placeholders for the missing ones |
+| **Missing optional fields** | `extract_fields.py` fills defaults |
+| **Duplicate field names** | `extract_fields.py` keeps all, writes warning, uses position-based matching downstream |
+| **LLM skips some fields** | `attach_citations.py` fills placeholders for missing ones |
 | **LLM returns wrong field names** | Case-insensitive matching first, then position fallback |
 | **LLM returns extra fields** | Ignored — F2 only uses fields that match input |
 | **LLM completely offline** | All fields get placeholders, pipeline continues |
-| **500+ fields** | No hard limit enforced for demo day. Pipeline processes whatever it gets. Noted as future concern for batching/performance. |
-| **Invalid JSON file** | `validate_input.py` rejects it with an error message |
-| **Schema with no table_name** | `validate_input.py` rejects it |
-| **Non-JSON format** | Not supported for demo day. JSON only. |
+| **500+ fields** | No limit enforced. Pipeline tries. LLM context window is the bottleneck. |
+| **Invalid JSON file** | `validate_input.py` rejects it |
+| **Non-JSON format** | Not supported for demo day |
