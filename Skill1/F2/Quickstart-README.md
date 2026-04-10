@@ -43,7 +43,7 @@ SKILL.md tells Claude to run these 9 steps in order:
 
 | Step | What Claude Does |
 |------|-----------------|
-| 1 | Saves the uploaded file as `output/intermediate/user_input.json` |
+| 1 | The user's uploaded file is saved as `output/intermediate/user_input.json` |
 | 2 | Runs `validate_input.py` — checks the schema is valid |
 | 3 | Runs `extract_fields.py` — pulls out individual fields |
 | 4 | Reads the extracted fields and writes descriptions (the LLM step) |
@@ -86,26 +86,31 @@ Team members building, testing, and debugging the scripts. You run each script o
 
 ```
 synchrony-doc-automation/
-├── scripts/
-│   ├── validate_input.py
-│   ├── extract_fields.py
-│   ├── attach_citations.py
-│   ├── add_timestamps.py
-│   ├── assemble_output.py
-│   └── generate_qa_report.py
+├── skills/
+│   └── data-dictionary/
+│       ├── scripts/
+│       │   ├── validate_input.py
+│       │   ├── extract_fields.py
+│       │   ├── attach_citations.py
+│       │   ├── add_timestamps.py
+│       │   ├── assemble_output.py
+│       │   └── generate_qa_report.py
+│       └── output/
+│           └── intermediate/
 ├── assets/
 │   ├── data_dictionary_template.md    (from F3)
 │   └── qa_report_template.md          (from F3)
-├── output/
-│   └── intermediate/
-└── test_inputs/
+└── specs/
+    └── f2-scripts-data-dictionary/
 ```
 
 If `output/` and `output/intermediate/` don't exist, create them:
 
 ```bash
-mkdir -p output/intermediate
+mkdir -p skills/data-dictionary/output/intermediate
 ```
+
+For the full repository layout including all three features, see the project spec.
 
 ---
 
@@ -137,7 +142,7 @@ You need a JSON schema file to feed the pipeline. Here's a minimal one you can c
 }
 ```
 
-Save this as `test_inputs/sample_schema.json`.
+Save this as `assets/sample_schema.json` (from F3) or a local `test_inputs/sample_schema.json` for development.
 
 **Rules for the input file:**
 - Must be valid JSON
@@ -156,30 +161,30 @@ Run each script from the project root directory. They go in order — each one r
 ### Step 1: Copy your test file into position
 
 ```bash
-cp test_inputs/sample_schema.json output/intermediate/user_input.json
+cp assets/sample_schema.json skills/data-dictionary/output/intermediate/user_input.json
 ```
 
-On demo day, SKILL.md does this automatically. During development, you do it manually.
+On demo day, the user's uploaded file is saved automatically. During development, you do it manually.
 
 ### Step 2: Validate the input
 
 ```bash
-python scripts/validate_input.py
+python skills/data-dictionary/scripts/validate_input.py
 ```
 
-**Reads:** `output/intermediate/user_input.json`
-**Writes:** `output/intermediate/validated_schema.json`
+**Reads:** `skills/data-dictionary/output/intermediate/user_input.json`
+**Writes:** `skills/data-dictionary/output/intermediate/validated_schema.json`
 
 If the input is bad, you'll see error messages listing every problem. Fix the input and run again.
 
 ### Step 3: Extract fields
 
 ```bash
-python scripts/extract_fields.py
+python skills/data-dictionary/scripts/extract_fields.py
 ```
 
-**Reads:** `output/intermediate/validated_schema.json`
-**Writes:** `output/intermediate/extracted_fields.json` (+ `extraction_warnings.json` if duplicates found)
+**Reads:** `skills/data-dictionary/output/intermediate/validated_schema.json`
+**Writes:** `skills/data-dictionary/output/intermediate/extracted_fields.json` (+ `extraction_warnings.json` if duplicates found)
 
 ### Step 4: LLM step (three options)
 
@@ -217,7 +222,7 @@ Example fake LLM output for the 3-field test schema:
 ]
 ```
 
-Save as `output/intermediate/llm_output.json`.
+Save as `skills/data-dictionary/output/intermediate/llm_output.json`.
 
 **Option C: Use Claude.** Paste the contents of `extracted_fields.json` into Claude and ask it to respond in the expected format. This is the closest to the demo day flow.
 
@@ -226,42 +231,42 @@ For most testing, **skipping or faking is fine.** You're testing whether your sc
 ### Step 5: Merge LLM output with extracted fields
 
 ```bash
-python scripts/attach_citations.py
+python skills/data-dictionary/scripts/attach_citations.py
 ```
 
-**Reads:** `output/intermediate/extracted_fields.json` + `output/intermediate/llm_output.json`
-**Writes:** `output/intermediate/merged_fields.json`
+**Reads:** `skills/data-dictionary/output/intermediate/extracted_fields.json` + `skills/data-dictionary/output/intermediate/llm_output.json`
+**Writes:** `skills/data-dictionary/output/intermediate/merged_fields.json`
 
 If `llm_output.json` doesn't exist, all fields get placeholder values. The pipeline keeps going.
 
 ### Step 6: Add timestamps
 
 ```bash
-python scripts/add_timestamps.py
+python skills/data-dictionary/scripts/add_timestamps.py
 ```
 
-**Reads:** `output/intermediate/merged_fields.json`
-**Writes:** `output/intermediate/timestamped_fields.json`
+**Reads:** `skills/data-dictionary/output/intermediate/merged_fields.json`
+**Writes:** `skills/data-dictionary/output/intermediate/timestamped_fields.json`
 
 ### Step 7: Build the data dictionary
 
 ```bash
-python scripts/assemble_output.py
+python skills/data-dictionary/scripts/assemble_output.py
 ```
 
-**Reads:** `output/intermediate/timestamped_fields.json` + `assets/data_dictionary_template.md`
-**Writes:** `output/data_dictionary.md`
+**Reads:** `skills/data-dictionary/output/intermediate/timestamped_fields.json` + `assets/data_dictionary_template.md`
+**Writes:** `skills/data-dictionary/output/data_dictionary.md`
 
 **Note:** This step needs the F3 template. If the template is missing, the script stops with an error message telling you the exact file path it expected. Steps 1–6 work without F3.
 
 ### Step 8: Build the QA report
 
 ```bash
-python scripts/generate_qa_report.py
+python skills/data-dictionary/scripts/generate_qa_report.py
 ```
 
-**Reads:** `output/intermediate/timestamped_fields.json` + `output/intermediate/extraction_warnings.json` (if exists)
-**Writes:** `output/qa_report.md`
+**Reads:** `skills/data-dictionary/output/intermediate/timestamped_fields.json` + `skills/data-dictionary/output/intermediate/extraction_warnings.json` (if exists)
+**Writes:** `skills/data-dictionary/output/qa_report.md`
 
 **Note:** Same as Step 7 — needs the F3 template (`assets/qa_report_template.md`). If missing, the script stops with an error message.
 
@@ -286,7 +291,7 @@ This is the quality check. Open it and look at:
 |---------|-----------------|
 | Report Header | Correct table name and field count? |
 | Coverage Statistics | What percentage of fields got real descriptions? |
-| Confidence Distribution | How many fields are High, Medium, Low, N/A? Do they add up to the total? |
+| Confidence Distribution | How many fields are `"High"`, `"Medium"`, `"Low"`, `"N/A"`? Do they add up to the total? |
 | Fields Requiring Clarification | Which fields need human review? |
 | Merge Corrections | Did F2 auto-fix anything? Does the fix make sense? |
 | Warnings | Any duplicate field names? Any LLM output issues? |
@@ -336,7 +341,7 @@ Run the same input through the pipeline 3 times. Diff the outputs. Everything sh
 | 1 | `output/intermediate/user_input.json` | (user provided) | Schema is malformed or missing fields |
 | 2 | `output/intermediate/validated_schema.json` | `validate_input.py` | Validation let something bad through |
 | 3 | `output/intermediate/extracted_fields.json` | `extract_fields.py` | Wrong field count, missing metadata |
-| 4 | `output/intermediate/llm_output.json` | Claude (F1) | Missing fields, wrong names, bad descriptions |
+| 4 | `output/intermediate/llm_output.json` | F1 (LLM step) | Missing fields, wrong names, bad descriptions |
 | 5 | `output/intermediate/merged_fields.json` | `attach_citations.py` | Wrong matches, unexpected placeholders |
 | 6 | `output/intermediate/timestamped_fields.json` | `add_timestamps.py` | Missing timestamps (rare) |
 | 7 | Template files in `assets/` | F3 | Rendering issue, not a data issue |
