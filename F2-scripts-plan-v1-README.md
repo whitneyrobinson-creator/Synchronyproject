@@ -1,6 +1,6 @@
 # Implementation Plan: F2 — Scripts: Data Dictionary Generation
 
-**Branch**: `f2-scripts-data-dictionary` | **Date**: 2026-04-05 | **Spec**: specs/f2-scripts-data-dictionary/spec.md
+**Branch**: `f2-scripts-data-dictionary` | **Date**: 2026-04-10 | **Spec**: specs/f2-scripts-data-dictionary/spec.md
 
 **Input**: Feature specification from `/specs/f2-scripts-data-dictionary/spec.md`
 
@@ -12,7 +12,15 @@ F2 — Scripts: Data Dictionary Generation implements the deterministic Python p
 
 The pipeline consists of **6 single-purpose Python scripts** that communicate via JSON files written to disk. Pre-LLM, the scripts validate the user's JSON schema file and extract field-level metadata into the format F1 expects. Post-LLM, they validate the LLM's output against the input (count check, field name matching), merge it with the extracted metadata and source citations, apply timestamps, assemble the final `data_dictionary.md`, and generate a `qa_report.md` with coverage statistics.
 
-**Graceful degradation:** If the LLM (F1) goes offline or returns unusable output, F2's scripts still run and produce a data dictionary containing all raw metadata (field names, types, constraints, enums, source paths, timestamps) — but with placeholder text where descriptions would normally appear. Every field is flagged `[NEEDS CLARIFICATION]`. The QA report notes that LLM-generated content is missing. This gives the team a structured starting point to manually write descriptions, or to re-run the skill when the LLM is back online.
+**Graceful degradation:** If the LLM (F1) goes offline or returns unusable output, F2's scripts still run and produce a data dictionary containing all raw metadata (field names, types, constraints, enums, source paths, timestamps) — but with placeholder values where LLM-generated content would normally appear. Placeholder values are:
+
+- `description`: `"[LLM did not return a description]"`
+- `confidence`: `"None"`
+- `clarification_flag`: `true`
+- `evidence_refs`: `["No evidence available — LLM did not process this field"]`
+- `merge_status`: `"placeholder"`
+
+The QA report notes that LLM-generated content is missing. This gives the team a structured starting point to manually write descriptions, or to re-run the skill when the LLM is back online. See data-model.md Section 6 for the full placeholder conventions table.
 
 **Demo day target:** Process the UCI Credit Card dataset (25 fields) end-to-end, producing an audit-ready data dictionary and QA report by **May 7, 2026**. JSON input only. All fields processed in a single pass. `glossary_mapper.py` is documented in the feature spec as P3 but is **not included in this plan**.
 
@@ -21,11 +29,34 @@ The pipeline consists of **6 single-purpose Python scripts** that communicate vi
 | # | Script | What It Does | Why It Matters | When It Runs |
 |---|---|---|---|---|
 | 1 | `validate_input.py` | Checks that the user's file is valid JSON with the required structure (`table_name`, `fields`, `field_name` per field). If anything is wrong, it collects ALL errors and reports them at once. | **Gatekeeper.** Nothing else runs until the input is clean. Prevents garbage-in-garbage-out. | Pre-LLM — Step 1 |
-| 2 | `extract_fields.py` | Reads the validated schema and pulls out every field's metadata (name, type, nullable, constraints, enums, comments). Builds a `source_path` tracing each field back to its origin file and table. | **Prepares the LLM's input.** The LLM can only write good descriptions if it receives clean, complete metadata. Also creates the traceability chain auditors need. | Pre-LLM — Step 2 |
-| 3 | `attach_citations.py` | Takes what the LLM returned and checks it: Did it respond for every field? Do the field names match? Then merges the LLM's descriptions and scores with the original metadata. If the LLM missed fields or was offline, fills in placeholders. | **Quality control on the LLM.** The LLM can make mistakes — skip fields, return wrong names, or go offline entirely. This script catches all of that and ensures no field is silently lost. | Post-LLM — Step 1 |
+| 2 | `extract_fields.py` | Reads the validated schema and pulls out every field's metadata (name, type, nullable, constraints, enums, comments). Builds a `source_path` tracing each field back to its origin file and table. Logs warnings for edge cases (e.g., duplicate field names) to `extraction_warnings.json`. | **Prepares the LLM's input.** The LLM can only write good descriptions if it receives clean, complete metadata. Also creates the traceability chain auditors need. | Pre-LLM — Step 2 |
+| 3 | `attach_citations.py` | Takes what the LLM returned and checks it: Did it respond for every field? Do the field names match? Then merges the LLM's descriptions and scores with the original metadata. If the LLM missed fields or was offline, fills in placeholders. Each field gets a `merge_status` of `"matched"` (LLM responded) or `"placeholder"` (LLM failed/skipped). This field drives coverage calculations and the QA report's run summary. When `attach_citations.py` fixes an issue, it logs a correction object (`type`, `original`, `corrected`, `reason`) in the field's `corrections` array. Five correction types exist: `clarification_flag_override`, `name_case_mismatch`, `description_over_limit`, `order_mismatch`, `duplicate_name_in_output`. All corrections surface in the QA report's Merge Corrections section. See data-model.md for full definitions. | **Quality control on the LLM.** The LLM can make mistakes — skip fields, return wrong names, or go offline entirely. This script catches all of that, corrects what it can, logs every correction, and ensures no field is silently lost. | Post-LLM — Step 1 |
 | 4 | `add_timestamps.py` | Adds a `last_verified` timestamp (same timestamp for every field in the run) to each field record. | **Audit trail.** Auditors need to know when each field was last verified. One timestamp per run keeps it consistent. | Post-LLM — Step 2 |
 | 5 | `assemble_output.py` | Takes all the merged, timestamped field data and fills in the data dictionary template (from F3) to produce the final `data_dictionary.md`. | **Produces the deliverable.** This is the document the user actually receives — the whole point of the skill. | Post-LLM — Step 3 |
 | 6 | `generate_qa_report.py` | Counts everything: how many fields got descriptions, how many have citations, how many are flagged for clarification. Produces `qa_report.md` with coverage stats and warnings. | **Trust but verify.** The QA report lets the user see at a glance whether the data dictionary is complete or if items need attention. | Post-LLM — Step 4 (final) |
+
+### QA Report Structure
+
+The QA report (`qa_report.md`) contains 6 sections:
+
+| Section | What It Contains | Always Present? |
+|---------|-----------------|-----------------|
+| 1. Pipeline Metadata | Table name, field count, run timestamp | Yes |
+| 2. Coverage Summary | How many fields got descriptions, percentage, confidence breakdown | Yes |
+| 3. Flagged Fields | List of fields where `clarification_flag` is `true` | Yes |
+| 4. Merge Corrections | Table of corrections applied by `attach_citations.py` | Only if corrections exist |
+| 5. Extraction Warnings | Warnings from `extract_fields.py` (e.g., duplicate field names) | Only if `extraction_warnings.json` exists |
+| 6. Run Summary | Overall pipeline status (see below) | Yes |
+
+### Pipeline Status (QA Report Run Summary)
+
+The Run Summary section reports one of three statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `Complete` | All fields matched, no warnings |
+| `Complete with warnings` | All fields matched, but extraction warnings or corrections exist |
+| `Partial` | Some or all fields got placeholders (LLM failed partially or entirely) |
 
 ---
 
@@ -72,9 +103,9 @@ The pipeline consists of **6 single-purpose Python scripts** that communicate vi
 | Constitution Principle | F2 Compliance | How F2 Follows This Rule |
 |---|---|---|
 | **Accuracy Over Speed** | ✅ Compliant | No speed requirements. Scripts prioritize correct extraction, correct validation, and correct counts over fast execution. `attach_citations.py` validates every LLM response before merging — never silently drops data. |
-| **Graceful Degradation** | ✅ Compliant | If the LLM is offline or returns bad output, F2 still runs. `attach_citations.py` checks if `llm_output.json` exists — if not, it fills in placeholders and flags every field `[NEEDS CLARIFICATION]`. The user gets a partial data dictionary with all raw metadata intact plus a QA report noting what's missing. |
+| **Graceful Degradation** | ✅ Compliant | If the LLM is offline or returns bad output, F2 still runs. `attach_citations.py` checks if `llm_output.json` exists — if not, it fills in placeholders and sets every field's `merge_status` to `"placeholder"`. The user gets a partial data dictionary with all raw metadata intact plus a QA report noting what's missing. |
 | **Simplicity First** | ✅ Compliant | 6 single-purpose Python scripts. Standard library only. File-based I/O. No databases, no frameworks, no cloud, no UI. Each script does one job and writes one file. |
-| **Audit-Ready by Default** | ✅ Compliant | Every field includes a `source_path` citation tracing it back to the original schema file. `qa_report.md` is the first artifact an auditor reviews — it provides coverage stats, flags items needing attention, and shows at a glance whether the data dictionary is complete or has gaps. |
+| **Audit-Ready by Default** | ✅ Compliant | Every field includes a `source_path` citation tracing it back to the original schema file. `qa_report.md` is the first artifact an auditor reviews — it provides coverage stats, flags items needing attention, and shows at a glance whether the data dictionary is complete or has gaps. All corrections are logged in the field's `corrections` array — nothing is silently fixed. |
 | **Never send raw PII to LLM** | ✅ Compliant | `extract_fields.py` is the **security boundary** — it decides exactly what metadata gets sent to the LLM (field names, types, constraints, enums, comments only). Actual data values from the dataset are never included. If this script has a bug, the security model breaks — so it must be carefully reviewed. |
 | **Never send API keys or credentials** | ✅ Compliant | No credentials exist in any script or intermediate file. Scripts handle only schema metadata and generated documentation. |
 | **Never send full source code or raw datasets** | ✅ Compliant | Only structured field metadata (extracted from the schema) is passed to the LLM. The raw schema file itself is not sent — only the extracted fields. |
@@ -96,7 +127,7 @@ The pipeline consists of **6 single-purpose Python scripts** that communicate vi
     ├── research.md          # Phase 0 — Python stdlib patterns, JSON validation approaches, file-based pipeline design
     ├── data-model.md        # Phase 1 — intermediate JSON schemas, merged field structure, placeholder conventions
     ├── quickstart.md        # Phase 1 — how to run, test, and debug the 6-script pipeline
-    ├── contracts/           # Phase 1 — input/output agreements between F2 → F1 and F2 → F3
+    ├── contracts.md         # Phase 1 — input/output agreements between F2 → F1 and F2 → F3
     └── tasks.md             # Phase 2 — implementation checklist (created separately)
 
 ### Source Code (repository root)
@@ -111,6 +142,24 @@ The pipeline consists of **6 single-purpose Python scripts** that communicate vi
             ├── assemble_output.py            # Post-LLM Step 3: fills F3 template → data_dictionary.md
             └── generate_qa_report.py         # Post-LLM Step 4: produces qa_report.md with coverage stats
 
+### Runtime Output (created by scripts)
+
+    skills/
+    └── data-dictionary/
+        └── output/                               # Created at runtime by os.makedirs()
+            ├── data_dictionary.md                # Final deliverable (from assemble_output.py)
+            ├── qa_report.md                      # Final deliverable (from generate_qa_report.py)
+            └── intermediate/
+                ├── validated_schema.json          # From validate_input.py
+                ├── extracted_fields.json          # From extract_fields.py
+                ├── extraction_warnings.json       # From extract_fields.py (conditional — only if warnings exist)
+                ├── merged_fields.json             # From attach_citations.py
+                └── timestamped_fields.json        # From add_timestamps.py
+
+**Files F2 reads but does not create:**
+- `user_input.json` — provided by the user via Claude upload, placed by SKILL.md (F1)
+- `llm_output.json` — written by the LLM during the F1 step
+
 **Structure Decision**: F2's deliverables are 6 Python scripts in `skills/data-dictionary/scripts/`.
 This plan only shows what F2 owns — the scripts directory. Other components in the same skill folder
 are owned by other features: `SKILL.md` (F1), `assets/` (F3). The `output/` directory and its
@@ -118,6 +167,7 @@ are owned by other features: `SKILL.md` (F1), `assets/` (F3). The `output/` dire
 not checked into the repository. This keeps the Source Code section focused on F2's actual
 deliverables (Constitution Principle 3: Simplicity First) and is consistent with how F1 and F3
 plans show only their own files.
+
 ### Who Owns What
 
 | Folder/File | Owner | F2's Relationship |
