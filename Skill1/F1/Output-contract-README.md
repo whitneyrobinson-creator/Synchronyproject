@@ -67,13 +67,13 @@ If Claude can't process a field, it still returns all 5 fields. It doesn't skip 
 }
 ```
 
-This way F2 always gets the same shape back. No special error handling needed — problem fields just show up as Low confidence with a flag.
+This way F2 always gets the same shape back. No special error handling needed — problem fields just show up as `"Low"` confidence with a flag.
 
 ---
 
 ## How F2 Validates the Output
 
-F2 runs checks before accepting the output. Two categories:
+F2 owns retry logic. F2 runs checks before accepting the output. Two categories:
 
 ### Reject and Retry (max 2 retries, 3 total attempts)
 
@@ -82,7 +82,7 @@ F2 runs checks before accepting the output. Two categories:
 | Is it valid JSON? | Claude added commentary or markdown outside the JSON |
 | Same number of objects as input fields? | Claude skipped fields in the middle of a long list |
 | Every object has all 5 fields? | Claude dropped a field from some objects |
-| `confidence` is High, Medium, or Low? | Claude used a different word |
+| `confidence` is `"High"`, `"Medium"`, or `"Low"`? | Claude used a different word |
 | `evidence_refs` is a non-empty list? | Claude left it empty |
 | `clarification_flag` is true or false? | Claude used a string instead of a boolean |
 
@@ -92,7 +92,7 @@ F2 runs checks before accepting the output. Two categories:
 |---|---|
 | `field_name` matches input exactly? | Claude "corrected" the casing |
 | `description` is ≤25 words? | Claude went slightly over on a complex field |
-| Low confidence → flag is true? | Claude forgot to set the flag (F2 can auto-correct this) |
+| `"Low"` confidence → flag is true? | Claude forgot to set the flag (F2 can auto-correct this) |
 | Output is in the same order as input? | Claude reordered (F2 can match by field_name) |
 | No duplicate field names? | Claude repeated a field |
 
