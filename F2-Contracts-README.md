@@ -131,27 +131,68 @@ This contract aligns with F1's output contract. See F1 plan for F1's side of thi
 
 `assemble_output.py` reads `timestamped_fields.json` and an F3 Markdown template to produce the final `data_dictionary.md`. `generate_qa_report.py` does the same for `qa_report.md`.
 
-### The Agreement — Placeholder Pending F3 Planning
+### The Agreement
 
-F3 planning hasn't happened yet. When it does, this contract will define:
+F3 delivers static template files. F2 reads them at runtime to determine the output format. The templates are the single source of truth for output structure (FR-F3-005) — F2 follows the templates, not the other way around.
 
-- **Template file names and locations** — Where F2 looks for the templates
-- **Template format** — How placeholders are marked in the template (e.g., `{{field_name}}`)
-- **Required placeholders** — Which template variables F2 expects to fill in
-- **What F2 does if the template is missing** — Likely: use a hardcoded fallback format
+### File Paths (Guaranteed by F3)
 
-### What We Know Now
+| F2 Script | F3 File | Guaranteed Path |
+|-----------|---------|----------------|
+| `assemble_output.py` | Data dictionary template | `assets/data_dictionary_template.md` |
+| `generate_qa_report.py` | QA report template | `assets/qa_report_template.md` |
+| All scripts (testing) | Sample schema | `assets/sample_schema.json` |
 
-| Detail | Value |
-|--------|-------|
-| Template files | `data_dictionary_template.md` and `qa_report_template.md` |
-| Template location | `assets/` directory (delivered by F3) |
-| Template format | TBD — pending F3 planning |
-| Fallback if template missing | TBD — pending F3 planning |
+F2 can hardcode these paths. F3 guarantees they won't change.
+
+### Template Format
+
+Templates use a **structure-based** approach (F3 Decision D-001):
+
+| Template Part | How F2 Uses It |
+|---------------|---------------|
+| **Header** | Simple `{placeholder}` substitution — replace `{table_name}`, `{source_file}`, `{generation_date}` with real values |
+| **Main table / sections** | Read the column headers or section structure from the template, then generate content programmatically |
+| **Footer** | Copy as-is into the output (static content) |
+
+**Placeholder format:** Single curly braces — `{table_name}`, not `{{table_name}}`. Only 3 header placeholders exist. Table rows and evidence entries are NOT placeholders — F2 generates those dynamically.
+
+### What F2 Expects from the Data Dictionary Template
+
+| Expectation | What Breaks If Violated |
+|-------------|------------------------|
+| File exists at `assets/data_dictionary_template.md` | Script stops with error message |
+| Valid Markdown with properly formatted tables | `assemble_output.py` can't parse the structure |
+| 8 columns in the main table: field_name, type, nullable, constraints, enums, description, confidence, last_verified | Output has wrong columns or missing data |
+| 3 header placeholders: `{table_name}`, `{source_file}`, `{generation_date}` | Output shows raw placeholder text |
+| Evidence & Citations section with `### {field_name}` subheading pattern | Evidence section is missing or malformed |
+| Footer with confidence legend | Auditors don't know what High/Medium/Low means |
+
+### What F2 Expects from the QA Report Template
+
+| Expectation | What Breaks If Violated |
+|-------------|------------------------|
+| File exists at `assets/qa_report_template.md` | Script stops with error message |
+| Report Header with run metadata fields | QA report has no metadata |
+| 6 sections in this exact order: Coverage Statistics, Confidence Distribution, Fields Requiring Clarification, Merge Corrections, Warnings, Processing Notes | Sections are missing, out of order, or have wrong names |
+
+### What F2 Does If a Template Is Missing
+
+1. Script stops immediately
+2. Prints: "Template not found at `assets/{filename}`. Pipeline cannot produce formatted output without the template. Ensure all F3 asset files are present before running."
+3. No output is produced for that step
+
+**This is NOT graceful degradation.** A missing template is a setup error — someone forgot to include the file. The fix is "put the file back." This is different from the LLM going offline (which IS graceful degradation).
+
+**Why not a hardcoded fallback template:** Creates two sources of truth. If someone updates the real template but forgets the backup, the pipeline silently uses the wrong format.
 
 ### What F2 Can Test Without F3
 
 Steps 1 through 4 (`validate_input.py` through `add_timestamps.py`) don't use templates. You can build and test those scripts before F3 delivers anything. Steps 5 and 6 (`assemble_output.py` and `generate_qa_report.py`) need the templates.
+
+### Cross-Reference
+
+This contract aligns with F3's contracts document (Contract 2: F3 → F2). See F3's contracts for F3's side of this agreement.
 
 ---
 
@@ -160,6 +201,11 @@ Steps 1 through 4 (`validate_input.py` through `add_timestamps.py`) don't use te
 ### The Core Rule
 
 **The pipeline never stops with no output.** No matter what goes wrong, F2 produces both `data_dictionary.md` and `qa_report.md`. They might be full of placeholders, but they exist.
+
+**Two exceptions where the pipeline stops entirely:**
+
+1. **Invalid input** — `validate_input.py` rejects the schema. If the schema is broken, there's nothing useful to produce.
+2. **Missing template** — `assemble_output.py` or `generate_qa_report.py` can't find its F3 template file. This is a setup error, not a runtime failure.
 
 ### Failure Scenarios
 
@@ -170,14 +216,12 @@ Steps 1 through 4 (`validate_input.py` through `add_timestamps.py`) don't use te
 | LLM returns bad output, all 3 attempts fail | F2 fills all fields with placeholders. | Both deliverables produced. 0% coverage. QA report shows full failure. |
 | LLM is completely offline | Same as above — `llm_output.json` doesn't exist. | Both deliverables produced. 0% coverage. |
 | LLM returns partial results | F2 merges what it can, fills placeholders for the rest. | Partial coverage. QA report shows which fields were missed. |
-| F3 template is missing | TBD — pending F3 planning. | TBD. |
-
-**Note:** The one case where the pipeline stops entirely is invalid input. That's intentional — if the schema is broken, there's nothing useful to produce. Every other failure results in partial or placeholder output.
+| F3 template is missing | Script stops with error: "Template not found at `assets/{filename}`." | No output for that step. This is a setup error — fix by ensuring all F3 asset files are present. |
 
 ### Three Ways the Team Knows Something Went Wrong
 
 1. **Console message** — Printed immediately during the run. Shows what failed, how many attempts, and what action was taken.
-2. **QA Report Section 6 (Run Summary)** — Permanent record in the output file. The console message disappears when you close the terminal; this stays.
+2. **QA Report Section 6 (Processing Notes)** — Permanent record in the output file. The console message disappears when you close the terminal; this stays.
 3. **Field-level `merge_status`** — Every placeholder field has `merge_status: "placeholder"`. You can see exactly which fields were affected.
 
 ### What Does NOT Happen on Error
@@ -195,9 +239,10 @@ Steps 1 through 4 (`validate_input.py` through `add_timestamps.py`) don't use te
 |----------|-----------|--------|
 | F2 → F1 | `extracted_fields.json` → SKILL.md | Defined |
 | F1 → F2 | `llm_output.json` → `attach_citations.py` | Defined |
-| F2 → F3 | `timestamped_fields.json` → F3 templates | Placeholder — pending F3 planning |
+| F2 → F3 | `timestamped_fields.json` → F3 templates | Defined |
 | Error | All failure scenarios | Defined |
 
 ### Alignment Check
 
-Both F2 → F1 and F1 → F2 contracts should match what's defined in the F1 plan. If there's ever a conflict between this document and the F1 plan, the team should resolve it before implementation — both sides need to agree on the exact JSON structures.
+- **F2 → F1 and F1 → F2** contracts should match what's defined in the F1 plan. If there's ever a conflict between this document and the F1 plan, the team should resolve it before implementation — both sides need to agree on the exact JSON structures.
+- **F2 → F3** contract should match what's defined in F3's contracts document (Contract 2: F3 → F2). If there's a conflict, the template is the source of truth (FR-F3-005) and F2's code must be updated to match.
