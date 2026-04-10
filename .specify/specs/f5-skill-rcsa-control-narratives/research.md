@@ -9,253 +9,291 @@
 
 ## 1. Problem Statement
 
-Synchrony's risk/compliance teams currently assess compliance posture manually — reading through repository artifacts, mapping evidence to controls, writing narratives, and flagging gaps. This process is time-consuming, inconsistent, and difficult to audit because the reasoning behind compliance claims is rarely documented with traceable citations.
+Synchrony's risk/compliance teams assess compliance posture manually — reading repository artifacts, deciding which artifacts relate to which controls, writing narratives explaining how the evidence supports each control, and flagging gaps where evidence is missing. This process is slow, inconsistent, and hard to audit because the reasoning behind compliance claims is rarely documented with traceable citations.
 
-F5 addresses the LLM reasoning layer of this problem: given pre-processed mapped evidence from the deterministic scripts pipeline (F6), can an LLM generate accurate, citation-backed, confidence-scored control narratives that serve as audit-ready documentation — while explicitly flagging gaps where evidence is missing or insufficient?
+F5 addresses the LLM reasoning and orchestration layer of this problem. Given a set of controls and pre-processed evidence from F6's deterministic scripts, the SKILL.md instructs the LLM to:
 
-F5 is the orchestrator. It tells the LLM when to call F6 scripts (input validation, artifact registry building, evidence mapping, citation validation) and when to reason on its own (narrative generation, confidence scoring, gap detection). The SKILL.md is the single instruction file that defines this entire workflow.
+1. Call F6 scripts to validate inputs, build the artifact registry, and map evidence to controls
+2. Reason over the mapped evidence to generate per-control narratives with inline citations
+3. Assign confidence tiers based on a defined rubric
+4. Flag gaps where zero evidence exists
+5. Call F6 scripts to validate that every citation resolves to a real artifact
+6. Assemble the final output documents
 
----
-
-## 2. Prompt Engineering Patterns
-
-### 2.1 Few-Shot Prompting (Used)
-
-F5 embeds worked examples directly in the SKILL.md — one for a control with strong evidence (HIGH confidence), one for a control with weak evidence (LOW confidence), and one for a control with no evidence (GAP flag). These examples show the full input → output cycle so the LLM can pattern-match against concrete demonstrations.
-
-**Why this pattern:** Few-shot prompting is the most reliable technique for structured generation tasks. The LLM mirrors the format, citation style, and quality level it sees in the examples. Without them, narrative tone, citation format, and gap flag language vary significantly across runs.
-
-**Application in F5:**
-
-- HIGH confidence example — shows multiple strong artifacts, specific narrative with inline citations, confident assessment
-- LOW confidence example — shows a single weak artifact, hedged narrative with caveat language, explicit note that stronger evidence is needed
-- GAP example — shows zero artifacts, explicit `[GAP]` flag, no compliance narrative generated
-
-**Key insight:** The citation format in the examples directly controls the citation format in the output. If examples show vague citations like "based on repository files," the LLM produces vague citations. If examples show specific citations like `[src/auth/login.py — Role-based access check function]`, the LLM produces specific citations.
-
-### 2.2 Rubric-Based Confidence Scoring (Used)
-
-Rather than letting the LLM assign confidence tiers based on intuition, F5 defines a deterministic rubric:
-
-| Confidence | Criteria |
-|------------|----------|
-| **HIGH** | ≥2 artifacts with matching evidence types that directly support the control objective |
-| **MEDIUM** | 1 artifact with a matching evidence type, OR ≥2 artifacts with indirect/partial support |
-| **LOW** | 1 artifact with indirect/partial support only |
-| **GAP** | 0 artifacts mapped to the control (separate flag, not a confidence tier) |
-
-**Why this pattern:** Rubric-based scoring makes confidence tiers meaningful and repeatable. Without a rubric, "HIGH" might mean different things on different runs. With a rubric, the tier is traceable to specific evidence counts and types, which is required for audit readiness (Constitution Principle 4).
-
-**Relationship to GAP flags:** GAP is not a confidence tier — it is a distinct flag that triggers when zero evidence exists. A control can have LOW confidence (weak evidence exists) without being a GAP (no evidence exists). This distinction matters because a GAP means "we found nothing" while LOW means "we found something, but it's weak."
-
-### 2.3 Constraint-Based Generation (Used)
-
-F5 applies explicit constraints to the LLM's output:
-
-- Narratives must be 3–5 sentences per control (FR-001)
-- Only cite artifacts present in the mapped evidence input (FR-006)
-- Never imply compliance without proof (FR-003, Constitution Principle 1)
-- When evidence is ambiguous, exclude it and flag for human review rather than include with caveats
-- Use exact artifact identifiers from the artifact registry (FR-007)
-- Prefer GAP flags over uncertain compliance claims (FR-008)
-
-**Why this pattern:** LLMs tend toward confident, comprehensive output by default. In a compliance context, this is dangerous — implying compliance without evidence is worse than flagging a gap. Explicit constraints force the LLM to stay conservative. The "exclude ambiguous evidence" rule prevents hallucinated compliance claims. The "prefer GAP over uncertainty" rule ensures the system fails safe.
-
-### 2.4 Orchestration Pattern (Used)
-
-The SKILL.md defines a sequential workflow where the LLM alternates between calling F6 scripts (deterministic operations) and performing its own reasoning (narrative generation). The sequence is:
-
-1. **Call script**: Validate inputs (F6)
-2. **Call script**: Build artifact registry (F6)
-3. **Call script**: Map evidence to controls (F6)
-4. **LLM reasons**: Generate narratives with citations, assign confidence tiers, flag gaps
-5. **Call script**: Validate citations against registry (F6)
-6. **LLM reasons**: Produce summary table and assemble final output
-
-**Why this pattern:** This separates deterministic work (parsing, validation, mapping) from reasoning work (narrative generation, confidence assessment). The LLM only does what only an LLM can do. Everything else is handled by reliable, testable scripts. This aligns with Constitution Principle 3 (Simplicity First) and the project spec's division of labor between SKILL.md and Scripts.
-
-### 2.5 Conservative Citation Strategy (Used)
-
-When an artifact maps to multiple controls, the SKILL.md instructs the LLM to cite it in both narratives but note the overlap. When the LLM is unsure about a mapping, it excludes the artifact and flags the uncertainty for human review.
-
-**Why this pattern:** In audit contexts, over-claiming is worse than under-claiming. A conservative citation strategy means every citation in the output is defensible. The post-processing validation (F6) catches any citations that slip through without matching the registry, but the SKILL.md's first line of defense is to be conservative at generation time.
-
-### 2.6 Red Teaming (Planned — Verification)
-
-After the SKILL.md is built, the team will feed intentionally bad inputs to verify the skill degrades gracefully:
-
-- Controls with zero evidence (should produce GAP flags, not hallucinated narratives)
-- Controls with only ambiguous evidence (should exclude evidence and flag uncertainty)
-- Malformed input structure (should flag the issue rather than guess at the data)
-- All four controls with no evidence (should produce four GAP flags)
-
-**Why this pattern:** Red teaming validates that the constraints and rubric actually work under adversarial conditions. It's the difference between "the SKILL.md says it handles missing evidence" and "we proved it handles missing evidence."
+The core challenge is not "can an LLM write a narrative" — it's "can we build an instruction file that reliably orchestrates a multi-step workflow where the LLM knows when to call a script, when to reason on its own, and when to stop and flag uncertainty."
 
 ---
 
-## 3. Alternative Approaches Considered
+## 2. Orchestration Design
 
-### 3.1 Multi-File Approach (Rejected)
+This is the central design challenge for F5. The SKILL.md must tell the LLM exactly when to delegate to scripts and when to think for itself.
 
-**What it is:** Separate files for the rubric, worked examples, output templates, and instructions — instead of embedding everything in one SKILL.md.
+### 2.1 The Division of Labor
 
-**Why considered:** The SKILL.md for F5 is more complex than F1 — it includes an orchestration workflow, confidence rubric, worked examples, output structure definitions, and edge case handling rules. Splitting could improve readability.
+| Work Type | Who Does It | Why |
+|-----------|-------------|-----|
+| Input validation | F6 script | Deterministic — either the input is valid or it isn't |
+| Artifact registry building | F6 script | Deterministic — parsing files and classifying artifacts is mechanical |
+| Evidence-to-control mapping | F6 script | Deterministic — matching artifact types to control evidence types is rule-based |
+| Narrative generation | LLM | Requires reasoning — synthesizing multiple artifacts into coherent prose |
+| Confidence scoring | LLM (rubric-guided) | Requires judgment — but constrained by a deterministic rubric |
+| Gap detection | LLM | Trivial reasoning — if mapped_artifacts is empty, flag GAP |
+| Citation validation | F6 script | Deterministic — checking citations against the registry is a lookup |
+| Final assembly | LLM | Requires reasoning — building the summary table and YAML front matter from the narrative results |
 
-**Why rejected:**
+**Design principle:** The LLM only does what only an LLM can do. Everything else goes to scripts. This minimizes hallucination surface area and maximizes testability.
 
-- The content volume is manageable in a single file. The orchestration sequence is 6 steps. The rubric is 4 levels. The worked examples are 3 short blocks.
-- Splitting means the LLM has to find and load multiple files at runtime — an extra dependency that could break.
-- F4 (Assets) will formalize templates into separate files later. During F5 development, keeping everything inline reduces coordination overhead.
-- Constitution Principle 3 (Simplicity First) favors the single-file approach for a 6-week prototype.
+### 2.2 The 6-Step Sequence
 
-**Revisit condition:** If the skill grows post-demo (more controls, more complex rubric, additional reference data), splitting into separate files would make sense.
+The SKILL.md defines this exact sequence:
 
-### 3.2 LLM-Driven Evidence Mapping (Rejected)
+1. **F6: Validate Inputs** — Confirm the control library, artifact registry, and mapped evidence are structurally valid. If validation fails, stop. Don't attempt to reason over bad data.
+2. **F6: Build Artifact Registry** — Parse the repository and produce the structured artifact inventory with snippets.
+3. **F6: Map Evidence** — Match artifacts to controls based on evidence type alignment. Produce the mapped evidence structure.
+4. **LLM: Generate Narratives** — For each control, read the mapped artifacts and their snippets. Write a 3–5 sentence narrative with inline citations. Assign a confidence tier using the rubric. Flag GAP if no artifacts are mapped.
+5. **F6: Validate Citations** — Check every inline citation against the artifact registry. Flag any citation that doesn't resolve.
+6. **LLM: Assemble Output** — Build the summary table, YAML front matter, and final document structure. If Step 5 found unresolved citations, fix them before finalizing.
 
-**What it is:** Having the LLM perform the evidence-to-control mapping itself, rather than receiving pre-mapped evidence from F6 scripts.
+**Why this order:** Steps 1–3 must complete before Step 4 because the LLM needs structured input to reason over. Step 5 must follow Step 4 because it validates the LLM's output. Step 6 must follow Step 5 because the final output must reflect validated citations.
 
-**Why rejected:**
+### 2.3 What the SKILL.md Actually Says at Each Step
 
-- Evidence mapping is a deterministic operation — matching artifact types to control requirements. Scripts do this reliably and repeatably.
-- LLM-driven mapping introduces hallucination risk — the LLM might map artifacts to controls based on surface-level keyword matching rather than actual evidence type alignment.
-- Constitution Principle 1 (Accuracy Over Speed) and the project spec's division of labor both specify that deterministic logic belongs in scripts.
-- The SKILL.md's job is reasoning (narratives, confidence, gaps), not data processing (parsing, mapping, validating).
+The SKILL.md doesn't just list the steps — it tells the LLM how to behave at each one:
 
-### 3.3 Remediation Suggestions in Gap Flags (Rejected)
+- **Before calling a script:** "Call [script name] with [these inputs]. Wait for the result before proceeding."
+- **After receiving script output:** "Check the result. If [error condition], stop and report the error. If [success condition], proceed to the next step."
+- **During reasoning steps:** "For each control in the mapped evidence, do the following: [specific instructions]."
+- **At decision points:** "If the mapped_artifacts list is empty, flag this control as [GAP] and skip narrative generation. Do not write a compliance narrative for a control with no evidence."
 
-**What it is:** When the LLM flags a GAP, it also suggests what evidence would be needed to close the gap.
-
-**Why considered:** Remediation suggestions would make the output more actionable for compliance teams.
-
-**Why rejected:**
-
-- Remediation suggestions require domain knowledge about Synchrony's specific compliance requirements. The LLM doesn't have this context.
-- Suggesting remediation could imply the system understands the organization's compliance posture, which it doesn't — it only sees the evidence provided.
-- The feature spec scopes F5 to detection and documentation, not remediation. Adding remediation expands scope beyond what's needed for the May 7th demo.
-- Constitution Principle 3 (Simplicity First) — prove core functionality works before adding complexity.
-
-**Revisit condition:** Post-demo, if Synchrony wants remediation guidance, the control library input could be extended to include "expected evidence types" that the SKILL.md references when flagging gaps.
-
-### 3.4 Separate Gap Report (Rejected)
-
-**What it is:** Producing a third output document dedicated to gap analysis, separate from the control narratives.
-
-**Why rejected:**
-
-- The feature spec defines two output documents: `rcsa_control_narratives.md` and `validation_report.md`. Adding a third document increases complexity without clear value.
-- Gap flags are most useful when they appear inline alongside the narratives — an auditor reading the control narratives sees immediately which controls have evidence and which don't.
-- The summary table at the top of `rcsa_control_narratives.md` already provides the at-a-glance gap overview.
+This level of explicitness is necessary because the LLM will otherwise make assumptions about what to do when things go wrong.
 
 ---
 
-## 4. Existing RCSA / Compliance Automation Tools
+## 3. Evidence Handling Strategy
 
-### 4.1 Landscape
+How the LLM consumes, cites, and excludes evidence is where the anti-hallucination design lives.
 
-Several tools exist for automated or semi-automated compliance documentation:
+### 3.1 What the LLM Sees
 
-| Tool | Approach | Strengths | Limitations for Our Use Case |
-|------|----------|-----------|------------------------------|
-| **AuditBoard** | Enterprise GRC platform with RCSA workflows | Full RCSA lifecycle management, risk scoring | Enterprise SaaS — requires deployment, licensing, integration with data sources |
-| **ServiceNow GRC** | Integrated risk and compliance module | Workflow automation, audit trail | Enterprise platform — heavy infrastructure, not file-based |
-| **LogicGate** | No-code GRC platform | Flexible risk assessment workflows | SaaS platform — doesn't generate narratives from repository artifacts |
-| **Hyperproof** | Compliance operations platform | Evidence collection, control mapping | Focused on evidence management, not narrative generation from code artifacts |
-| **Drata** | Continuous compliance monitoring | Automated evidence collection | SaaS, focused on SOC 2/ISO — doesn't generate auditor-friendly narratives |
+The LLM receives three structured inputs:
 
-### 4.2 Why We're Building Our Own
+- **Control Library** — what controls to assess, including the control objective (what the control is supposed to achieve) and expected evidence types
+- **Artifact Registry** — every artifact found in the repo, with file paths, types, and content snippets
+- **Mapped Evidence** — which artifacts map to which controls, with a relevance indicator (direct or indirect)
 
-None of the existing tools solve F5's specific problem:
+The LLM reads the content snippets to understand what each artifact actually does. It does not read full files — F6 extracts the relevant snippets.
 
-1. **We need narratives generated from repository artifacts.** Existing GRC tools manage compliance workflows but don't analyze code repositories to generate evidence-backed narratives. F5 reads mapped evidence (file paths, content snippets, artifact types) and produces auditor-friendly prose — no existing tool does this.
-2. **We need explicit gap detection with zero false negatives.** Existing tools track compliance status but rely on human input to flag gaps. F5 automatically detects when evidence is missing or insufficient and flags it explicitly — the system must never imply compliance without proof.
-3. **We need citation traceability to specific artifacts.** Every claim in a narrative must trace back to a specific file, function, or test in the repository via inline citations. Existing tools don't provide this level of per-claim provenance from code artifacts.
-4. **We need it to run on Claude with no infrastructure.** Constitution Principle 3 (Simplicity First) and the tech stack rules specify file-based, no cloud deployment, no enterprise licensing. Existing GRC tools all require infrastructure we're not building for a 6-week prototype.
-5. **The skillset is designed for Synchrony's handoff.** The goal is a proof of concept that Synchrony can extend within their environment. An enterprise GRC tool would be Synchrony's choice post-handoff — our job is to prove the LLM-based approach works.
+### 3.2 Citation Rules
 
-### 4.3 What We Learned From the Landscape
+| Rule | Description | Why |
+|------|-------------|-----|
+| Only cite what's in the input | Never reference an artifact not in the artifact registry | Prevents hallucinated citations |
+| Use descriptive citations | Format: `[file_path — brief description]` | Readable by auditors who may not know the codebase |
+| One citation per claim | Each factual claim in the narrative should trace to a specific artifact | Enables per-claim verification |
+| Citations are validated post-generation | F6 checks every citation against the registry in Step 5 | Catches any citations the LLM invented |
 
-- **Summary tables are standard.** Every GRC tool provides at-a-glance compliance dashboards. F5 follows this pattern with the summary table at the top of the output.
-- **Gap flagging is table stakes.** Compliance tools that don't explicitly flag gaps are not audit-ready. F5's explicit GAP flags with zero false negative tolerance align with industry expectations.
-- **Human review is always required.** Even enterprise GRC platforms position their output as inputs to human decision-making. F5's confidence tiers and GAP flags formalize this — the output is explicitly a draft for human review, not a final compliance determination.
+### 3.3 Ambiguity Handling
 
----
+This was a key design decision from the interview. When evidence is ambiguous — the artifact might relate to the control, but it's not clear — the SKILL.md instructs the LLM to:
 
-## 5. F5-Level Testing vs. End-to-End Testing
+1. **Exclude the artifact** from the narrative
+2. **Flag the uncertainty** for human review
+3. **Do not include it with caveats** — a hedged citation is still a citation, and it might be wrong
 
-### 5.1 F5-Level Testing (Standalone)
+**Why exclude rather than include:** In compliance contexts, implying evidence exists when it's uncertain is worse than flagging a gap. An auditor who sees a citation assumes it's been verified. A false citation undermines trust in the entire document. Excluding ambiguous evidence and flagging it for human review is the conservative, audit-safe approach.
 
-F5 can be tested independently by running the SKILL.md against hand-crafted sample evidence in Claude Desktop or claude.ai. This tests:
+### 3.4 Multi-Control Artifacts
 
-- Whether the SKILL.md produces valid narratives for each control
-- Whether confidence scoring follows the rubric
-- Whether GAP flags trigger correctly when evidence is missing
-- Whether citations reference only artifacts present in the input
-- Whether the summary table accurately reflects control statuses
-- Whether ambiguous evidence is excluded and flagged
+When a single artifact maps to multiple controls (e.g., a CI/CD config that's relevant to both Change Management and Access Control):
 
-**Test data:** Sample mapped evidence for all four demo controls — Access Control (strong evidence), Change Management (weak evidence), Data Quality (ambiguous evidence), Incident Handling (no evidence).
+- Cite it in both narratives
+- Note the overlap in each narrative (e.g., "This artifact also provides evidence for [other control]")
+- Count it as evidence for both controls in confidence scoring
 
-**Who runs it:** The F5 developer, during SKILL.md iteration.
+This was confirmed during the interview. The alternative — citing it in only one control — would create artificial gaps.
 
-### 5.2 End-to-End Testing (Full Pipeline)
+### 3.5 Snippet as Ground Truth
 
-End-to-end testing runs the complete pipeline: F6 validates inputs → F6 builds artifact registry → F6 maps evidence → F5 generates narratives → F6 validates citations → F6 assembles final output. This tests:
-
-- Whether F6's evidence mapping produces correct structured input for F5
-- Whether F5's output integrates cleanly with F6's assembly and validation logic
-- Whether the final `rcsa_control_narratives.md` and `validation_report.md` match expected format
-- Whether citation validation catches any hallucinated references
-
-**Test data:** Full sample artifact index, test catalog, and control library for the demo dataset.
-
-**Who runs it:** The full team, after F6 is built.
-
-### 5.3 Ground Truth Evaluation
-
-The team will manually score F5's output against the success criteria (SC-001 through SC-005) using the demo dataset. This establishes baseline performance and sets thresholds for demo day.
-
-**Process:**
-
-1. Build the SKILL.md
-2. Run it on sample mapped evidence for all four controls
-3. Team manually scores output across all 5 success criteria
-4. Set thresholds based on actual performance
-5. Document final thresholds before demo day
+The `content_snippet` in the artifact registry is the LLM's ground truth. If the artifact's metadata (type, description) says one thing but the snippet shows something different, the LLM trusts the snippet. This prevents cases where F6's classification is slightly off but the actual code tells the real story.
 
 ---
 
-## 6. Key Design Decisions Summary
+## 4. Confidence & Gap Detection Model
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Orchestration model | SKILL.md orchestrates F6 scripts + does its own reasoning | Separates deterministic work from LLM reasoning; LLM only does what only an LLM can do |
-| File structure | Single SKILL.md with everything embedded | Content volume manageable; reduces runtime dependencies; Simplicity First |
-| Output documents | Two: `rcsa_control_narratives.md` + `validation_report.md` | Matches feature spec; narratives for auditors, validation for QA |
-| Output format | Markdown with YAML front matter | Human-readable, version-controllable, consistent with project-wide output format |
-| Evidence input format | File paths + content snippets (structured JSON) | Gives LLM enough context to write narratives without sending raw source files |
-| Confidence scoring | Rubric-based (HIGH/MEDIUM/LOW) | Repeatable, auditable, traceable to specific evidence counts and types |
-| GAP flags | Distinct flag, separate from confidence tiers | GAP = zero evidence (binary); confidence = evidence quality (graduated) |
-| Gap handling | Flag only — no remediation suggestions | Remediation requires domain knowledge the LLM doesn't have; out of scope for demo |
-| Weak evidence (single artifact) | Write narrative, assign LOW confidence | Provides value while being transparent about evidence weakness |
-| Multi-control artifacts | Cite in both narratives, note overlap | Conservative but complete; auditor sees all relevant evidence per control |
-| Ambiguous mappings | Exclude, flag uncertainty for human review | Anti-hallucination; accuracy over coverage (Constitution Principle 1) |
-| Framework approach | Framework-agnostic — controls provided as input | Not tied to a specific compliance framework; adaptable to any control set |
-| Demo controls | Access Control, Change Management, Data Quality, Incident Handling | Four generic controls that demonstrate the pattern without requiring Synchrony-specific knowledge |
-| Citation format | Descriptive in narratives, full technical detail in validation report | Narratives readable by auditors; validation report useful for QA |
-| Build order | F5 first, then F4, then F6 | High-risk LLM dependency addressed first; output structure defined before templates formalized |
+### 4.1 Confidence Tiers
+
+| Tier | Criteria | What It Signals |
+|------|----------|-----------------|
+| **HIGH** | ≥2 artifacts with direct relevance supporting the control objective | Strong evidence — multiple artifacts corroborate the control |
+| **MEDIUM** | 1 artifact with direct relevance, OR ≥2 artifacts with indirect relevance | Moderate evidence — something exists but coverage is incomplete |
+| **LOW** | 1 artifact with indirect relevance only | Weak evidence — barely supports the control; needs human review |
+
+### 4.2 GAP Flag
+
+GAP is not a confidence tier. It is a separate binary flag:
+
+- **Triggered when:** `mapped_artifacts` is empty for a control (zero artifacts)
+- **What it means:** No evidence was found in the repository for this control
+- **What the LLM does:** Writes a GAP statement (what's missing), not a compliance narrative (what exists)
+- **What the LLM does NOT do:** Suggest remediation steps, speculate about evidence that might exist elsewhere, or imply the control might be satisfied
+
+**Why separate from confidence:** A control with LOW confidence has weak evidence — something was found, it's just not strong. A control with a GAP flag has nothing. These are fundamentally different situations that require different responses from the auditor. Collapsing them into a single scale would obscure the distinction.
+
+### 4.3 Scoring Rules
+
+1. Count artifacts with direct relevance and indirect relevance separately
+2. Apply the tier criteria from the table above
+3. If the snippet contradicts the artifact's metadata, lower confidence by one tier and note the mismatch
+4. Never inflate confidence — if the evidence is weak, say so
+5. Every control gets exactly one outcome: a confidence tier (HIGH/MEDIUM/LOW) or a GAP flag, never both
+
+### 4.4 Edge Cases
+
+| Situation | Outcome | Reasoning |
+|-----------|---------|-----------|
+| 3 direct artifacts | HIGH | ≥2 direct → HIGH |
+| 2 artifacts: 1 direct, 1 indirect | HIGH | ≥2 total with at least 1 direct |
+| 2 indirect artifacts | MEDIUM | ≥2 but only indirect support |
+| 1 direct artifact | MEDIUM | 1 direct → MEDIUM |
+| 1 indirect artifact | LOW | 1 indirect → LOW |
+| 0 artifacts | GAP | No evidence → GAP flag |
+| Metadata says "access control" but snippet shows logging code | Drop one tier, note mismatch | Snippet is ground truth |
+| Same artifact in 3 controls | Counts for all 3 | Multi-control artifacts are valid evidence for each |
+| All 4 controls have 0 artifacts | 4 GAP flags | Don't invent evidence to look useful |
 
 ---
 
-## 7. Open Research Questions
+## 5. Alternatives Considered
+
+### 5.1 LLM-Driven Evidence Mapping (Rejected)
+
+**What it is:** Having the LLM perform the evidence-to-control mapping itself instead of receiving pre-mapped evidence from F6.
+
+**Why rejected:** Evidence mapping is deterministic — matching artifact types to control evidence types is rule-based. Giving this to the LLM introduces hallucination risk (the LLM might map artifacts based on surface-level keyword matching rather than actual type alignment). Constitution Principle 1 (Accuracy Over Speed) and the project spec's division of labor both specify that deterministic logic belongs in scripts.
+
+### 5.2 Remediation Suggestions in Gap Flags (Rejected)
+
+**What it is:** When the LLM flags a GAP, it also suggests what evidence would close the gap.
+
+**Why rejected:** Remediation requires domain knowledge about Synchrony's specific compliance environment. The LLM doesn't have this context. Suggesting remediation could imply the system understands the organization's compliance posture, which it doesn't. Scoped out for the May 7th demo — prove detection works before adding guidance.
+
+**Revisit condition:** Post-demo, the control library input could include "expected evidence types" that the SKILL.md references when flagging gaps.
+
+### 5.3 Multi-File SKILL.md (Rejected)
+
+**What it is:** Splitting the rubric, worked examples, and output templates into separate files alongside the SKILL.md.
+
+**Why rejected:** The content volume is manageable in a single file (6-step sequence, 3-tier rubric, 3 worked examples). Splitting adds runtime file-loading dependencies. F4 will formalize templates later — during F5 development, keeping everything inline reduces coordination overhead. Constitution Principle 3 (Simplicity First).
+
+**Revisit condition:** If the skill grows post-demo (more controls, more complex rubric, additional reference data).
+
+### 5.4 Separate Gap Report (Rejected)
+
+**What it is:** A third output document dedicated to gap analysis.
+
+**Why rejected:** Gap flags are most useful inline alongside the narratives — an auditor reading the control narratives sees immediately which controls have evidence and which don't. The summary table already provides the at-a-glance gap overview. A third document adds complexity without clear value.
+
+### 5.5 Include Ambiguous Evidence with Caveats (Rejected)
+
+**What it is:** When evidence is ambiguous, include it in the narrative with hedging language rather than excluding it.
+
+**Why rejected:** A hedged citation is still a citation. An auditor who sees it may assume it's been verified. In compliance contexts, implying evidence exists when it's uncertain is worse than flagging a gap. Excluding and flagging for human review is the conservative, audit-safe approach. Constitution Principle 1 (Accuracy Over Speed).
+
+---
+
+## 6. Existing Tools Landscape
+
+Several GRC (Governance, Risk, Compliance) platforms exist for compliance management:
+
+| Tool | What It Does | Why It Doesn't Solve F5's Problem |
+|------|-------------|-----------------------------------|
+| AuditBoard | Enterprise RCSA lifecycle management | Doesn't generate narratives from repository artifacts |
+| ServiceNow GRC | Integrated risk/compliance workflows | Enterprise platform — heavy infrastructure, not file-based |
+| Hyperproof | Evidence collection and control mapping | Manages evidence but doesn't generate auditor-facing narratives |
+| Drata | Continuous compliance monitoring (SOC 2/ISO) | Automated evidence collection but no narrative generation from code |
+
+**Why we're building our own:** No existing tool generates citation-backed, confidence-scored narratives from repository artifacts without infrastructure. F5 proves the LLM-based approach works as a file-based prototype that Synchrony can extend post-handoff.
+
+**What we learned from the landscape:** Summary tables are standard (F5 includes one). Gap flagging is table stakes (F5's GAP flags align with industry expectations). Human review is always required (F5's confidence tiers and GAP flags formalize this).
+
+---
+
+## 7. Testing Strategy
+
+### 7.1 Standalone Testing (F5 Only)
+
+Run the SKILL.md against hand-crafted sample evidence in Claude Desktop. Tests:
+
+- Narrative quality and citation accuracy
+- Confidence rubric adherence
+- GAP flag triggering (zero false negatives)
+- Ambiguous evidence exclusion
+- Summary table accuracy
+
+**Test data:** Sample mapped evidence for all four demo controls:
+- Access Control — 3 direct artifacts (expect HIGH)
+- Change Management — 1 direct artifact (expect MEDIUM or LOW)
+- Data Quality — 0 artifacts (expect GAP)
+- Incident Handling — 0 artifacts (expect GAP)
+
+### 7.2 End-to-End Testing (Full Pipeline)
+
+Run the complete F6 → F5 → F6 pipeline. Tests:
+
+- F6's evidence mapping produces correct structured input
+- F5's output integrates with F6's citation validation
+- Final documents match expected format
+- Citation resolution rate is 100%
+
+### 7.3 Red Teaming
+
+Feed intentionally bad inputs to verify graceful degradation:
+
+- All controls with zero evidence (should produce 4 GAP flags)
+- Controls with only ambiguous evidence (should exclude and flag)
+- Malformed input structure (should stop and report error)
+- Artifact with metadata that contradicts its snippet (should trust snippet, lower confidence)
+
+### 7.4 Ground Truth Evaluation
+
+Manually score F5's output against success criteria. Establish baseline performance and set thresholds before demo day.
+
+---
+
+## 8. Design Decisions Log
+
+Complete record of decisions made during the research interview.
+
+| # | Decision | Choice | Rationale |
+|---|----------|--------|-----------|
+| 1 | Orchestration model | SKILL.md calls F6 scripts + reasons on its own | LLM only does what only an LLM can do; everything else is scripts |
+| 2 | Gap handling | Flag only — no remediation | Remediation requires domain knowledge the LLM doesn't have |
+| 3 | Confidence tiers | HIGH / MEDIUM / LOW | Three tiers with a deterministic rubric for repeatability |
+| 4 | GAP flag | Separate from confidence — binary flag | GAP = zero evidence (fundamentally different from LOW = weak evidence) |
+| 5 | Framework approach | Framework-agnostic | Controls provided as input; not tied to any specific compliance framework |
+| 6 | Demo controls | Access Control, Change Management, Data Quality, Incident Handling | Four generic controls that demonstrate the pattern |
+| 7 | Output documents | Two: narratives + validation report | Narratives for auditors, validation for QA |
+| 8 | Output format | Markdown with YAML front matter | Human-readable, version-controllable |
+| 9 | Evidence input | File paths + content snippets (structured YAML) | Enough context for narratives without sending full files |
+| 10 | Weak evidence | Write narrative, assign LOW confidence | Provides value while being transparent about weakness |
+| 11 | Multi-control artifacts | Cite in both, note overlap | Conservative but complete |
+| 12 | Ambiguous mappings | Exclude, flag for human review | Anti-hallucination; accuracy over coverage |
+| 13 | File structure | Single SKILL.md | Content volume manageable; Simplicity First |
+| 14 | Build order | F5 → F4 → F6 | High-risk LLM dependency first |
+| 15 | Citation format | Descriptive in narratives, technical in validation report | Narratives for auditors, validation for QA |
+
+---
+
+## 9. Open Research Questions
 
 | # | Question | Status | Impact |
 |---|----------|--------|--------|
-| 1 | What is the optimal evidence snippet length for narrative quality? | TBD — test during baseline | Too short = vague narratives; too long = context window pressure |
-| 2 | Does the number of controls per run affect output quality? | TBD — test if scaling beyond 4 controls | May require batching strategy for production use |
-| 3 | How stable is output across Claude model versions? | TBD — test if model updates occur before demo day | May require SKILL.md adjustments |
-| 4 | What is Synchrony's actual control count and codebase size? | Unknown — deferred to handoff | Determines production scaling requirements |
-| 5 | Can the confidence rubric thresholds be calibrated from real-world data? | Deferred — future enhancement | Would make confidence tiers more meaningful for Synchrony's specific context |
-| 6 | Does the 90-second per-call ceiling hold under multi-pass reasoning? | TBD — monitor during testing | Risk flagged in Constitution Check; may require optimizing prompt length |
+| 1 | Optimal snippet length for narrative quality | TBD — test during baseline | Too short = vague narratives; too long = context window pressure |
+| 2 | Scaling beyond 4 controls per run | TBD — test if needed | May require batching strategy for production |
+| 3 | Output stability across Claude model versions | TBD — test if model updates occur | May require SKILL.md adjustments |
+| 4 | Synchrony's actual control count and codebase size | Unknown — deferred to handoff | Determines production scaling requirements |
+| 5 | Confidence rubric calibration from real-world data | Deferred — future enhancement | Would make tiers more meaningful for Synchrony's context |
+| 6 | 90-second per-call ceiling under multi-pass reasoning | TBD — monitor during testing | Risk flagged in Constitution Check |
 
 ---
 
