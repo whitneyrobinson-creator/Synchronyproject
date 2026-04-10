@@ -31,7 +31,7 @@ Every script reads from and writes to `output/intermediate/`. All intermediate f
 | `validated_schema.json` | `validate_input.py` | `extract_fields.py` |
 | `extracted_fields.json` | `extract_fields.py` | SKILL.md (F1), `attach_citations.py` |
 | `extraction_warnings.json` | `extract_fields.py` (only if warnings exist) | `generate_qa_report.py` |
-| `llm_output.json` | Claude/F1 (LLM step) | `attach_citations.py` |
+| `llm_output.json` | F1 (LLM step — Claude writes this file during Step 3) | `attach_citations.py` |
 | `merged_fields.json` | `attach_citations.py` | `add_timestamps.py` |
 | `timestamped_fields.json` | `add_timestamps.py` | `assemble_output.py`, `generate_qa_report.py` |
 | `data_dictionary.md` | `assemble_output.py` | User (final deliverable) |
@@ -92,7 +92,7 @@ When `attach_citations.py` fixes something, it logs the correction in the field'
 
 | Type | What Triggered It | What F2 Does |
 |------|-------------------|--------------|
-| `clarification_flag_override` | Confidence is "Low" but flag is `false` | Flips flag to `true` |
+| `clarification_flag_override` | Confidence is `"Low"` but flag is `false` | Flips flag to `true` |
 | `name_case_mismatch` | LLM returned wrong casing (e.g., `education` vs `EDUCATION`) | Matches case-insensitively, keeps original casing |
 | `description_over_limit` | Description over 25 words | Keeps it (soft limit), logs for awareness |
 | `order_mismatch` | LLM returned fields in different order | Matches by name, not position |
@@ -109,7 +109,7 @@ When the LLM fails to describe a field, F2 fills these values:
 | Field | Placeholder Value | Type |
 |-------|------------------|------|
 | `description` | `"[LLM did not return a description]"` | string |
-| `confidence` | `"None"` | string |
+| `confidence` | `"N/A"` | string |
 | `evidence_refs` | `["No evidence available — LLM did not process this field"]` | array (single item) |
 | `clarification_flag` | `true` | boolean |
 | `merge_status` | `"placeholder"` | string |
@@ -123,9 +123,9 @@ When the LLM fails to describe a field, F2 fills these values:
 
 **F1 controls the LLM. F2 controls everything else.**
 
-- F2 never calls the LLM directly. F2 never decides to retry.
+- F2 never calls the LLM directly.
 - F2 validates whatever file it's given. Good output → merge. Bad or missing output → placeholders.
-- Retries are F1's job. SKILL.md decides when to re-run the LLM (up to 3 total attempts).
+- F2 owns retry logic — max 2 retries (3 total attempts). If all attempts fail, all fields get placeholders and the pipeline continues.
 
 **One shared field:** `clarification_flag`. The LLM sets it initially. F2 can override `false` → `true` (never the reverse). This is the only field where both features have a say.
 
@@ -135,7 +135,7 @@ When the LLM fails to describe a field, F2 fills these values:
 
 ### Two Failure Scenarios, Same Outcome
 
-Whether the LLM returns bad output 3 times or never responds at all, the result is the same: all fields get placeholders, and the pipeline keeps running.
+Whether the LLM returns bad output after all retry attempts or never responds at all, the result is the same: all fields get placeholders, and the pipeline keeps running.
 
 ### How the Team Knows Something Went Wrong
 
