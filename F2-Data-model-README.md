@@ -35,7 +35,7 @@ As a field moves through the pipeline, it gains keys:
 
 | Stage | File | Keys Per Field |
 |-------|------|---------------|
-| User Input | `user_input.json` | 1–6 (only `field_name` required) |
+| User Input | `user_input.json` | 1–7 (only `field_name` required) |
 | After Extraction | `extracted_fields.json` | 8 |
 | After LLM | `llm_output.json` | 5 (separate structure) |
 | After Merge | `merged_fields.json` | 14 |
@@ -52,6 +52,7 @@ This is the file the user uploads. For demo day, it's JSON. SKILL.md saves a cop
 ```json
 {
   "table_name": "credit_card_clients",
+  "source_file": "sample_schema.json",
   "fields": [
     {
       "field_name": "ID"
@@ -60,13 +61,14 @@ This is the file the user uploads. For demo day, it's JSON. SKILL.md saves a cop
 }
 ```
 
-That's the bare minimum. Two required keys at the top level, one required key per field.
+That's the bare minimum. Three required keys at the top level, one required key per field.
 
 ### Full Schema (All Optional Fields Included)
 
 ```json
 {
   "table_name": "credit_card_clients",
+  "source_file": "sample_schema.json",
   "fields": [
     {
       "field_name": "LIMIT_BAL",
@@ -85,6 +87,7 @@ That's the bare minimum. Two required keys at the top level, one required key pe
 | Field | Type | Required | Default If Missing | Notes |
 |-------|------|----------|-------------------|-------|
 | `table_name` | string | **Yes** | — | Name of the database table |
+| `source_file` | string | **Yes** | — | Name of the original data source file (e.g., `"sample_schema.json"`) |
 | `fields` | array of objects | **Yes** | — | Must have at least 1 field |
 | `fields[].field_name` | string | **Yes** | — | Name of the column |
 | `fields[].type` | string | No | `"UNKNOWN"` | Data type (e.g., INTEGER, VARCHAR) |
@@ -97,6 +100,7 @@ That's the bare minimum. Two required keys at the top level, one required key pe
 
 - Is it valid JSON?
 - Does `table_name` exist and is it a non-empty string?
+- Does `source_file` exist and is it a non-empty string?
 - Does `fields` exist and is it a non-empty array?
 - Does every field have a `field_name` that's a non-empty string?
 
@@ -386,12 +390,15 @@ The quality report. `generate_qa_report.py` reads `timestamped_fields.json` (and
 
 | # | Section | What It Shows | Always Present? |
 |---|---------|--------------|-----------------|
-| 1 | Pipeline Metadata | Table name, field count, run timestamp | Yes |
-| 2 | Coverage Summary | Fields with descriptions, percentage, placeholder count | Yes |
-| 3 | Flagged Fields | Fields where `clarification_flag` is `true` | Yes |
+| — | Report Header | Table name, field count, run timestamp, pipeline version | Yes |
+| 1 | Coverage Statistics | Fields with descriptions, percentage, placeholder count | Yes |
+| 2 | Confidence Distribution | Counts and percentages of High, Medium, Low, and N/A confidence fields | Yes |
+| 3 | Fields Requiring Clarification | Fields where `clarification_flag` is `true` | Yes |
 | 4 | Merge Corrections | Corrections applied by `attach_citations.py` | Only if corrections exist |
-| 5 | Extraction Warnings | Duplicate field warnings from `extract_fields.py` | Only if `extraction_warnings.json` exists |
-| 6 | Run Summary | Overall status — clean, partial, or failed | Yes |
+| 5 | Warnings | Duplicate field warnings from `extract_fields.py`, LLM output validation issues, missing LLM output | Only if warnings exist |
+| 6 | Processing Notes | LLM availability, fields processed, batching info, run timestamp | Yes |
+
+**Section names are authoritative.** These names come from F3's QA report template (`qa_report_template.md`), which is the single source of truth for the QA report structure (FR-F3-005). `generate_qa_report.py` must use these exact section names.
 
 ### Coverage Calculation
 
@@ -401,6 +408,14 @@ coverage_percentage = (fields_with_descriptions / total_fields) × 100
 
 A field "has a description" if its `merge_status` is `"matched"`. Placeholder fields don't count toward coverage.
 
+### Confidence Distribution Calculation
+
+```
+High count + Medium count + Low count + N/A count = Total Fields
+```
+
+A field's confidence is `"None"` (counted as N/A) if the LLM failed to process it. This sum must always equal the total field count. If it doesn't, something is wrong in the pipeline.
+
 ---
 
 ## 10. Edge Cases
@@ -409,12 +424,18 @@ A field "has a description" if its `merge_status` is `"matched"`. Placeholder fi
 |----------|-------------|
 | **Empty fields array** | `validate_input.py` rejects it |
 | **Missing `field_name`** | `validate_input.py` rejects it |
+| **Missing `source_file`** | `validate_input.py` rejects it |
 | **Missing optional fields** | `extract_fields.py` fills defaults |
 | **Duplicate field names** | `extract_fields.py` keeps all, writes warning, uses position-based matching downstream |
 | **LLM skips some fields** | `attach_citations.py` fills placeholders for missing ones |
 | **LLM returns wrong field names** | Case-insensitive matching first, then position fallback |
 | **LLM returns extra fields** | Ignored — F2 only uses fields that match input |
 | **LLM completely offline** | All fields get placeholders, pipeline continues |
+| **Template file missing** | `assemble_output.py` or `generate_qa_report.py` stops with clear error message. This is a setup error, not a graceful degradation scenario. |
 | **500+ fields** | No limit enforced. Pipeline tries. LLM context window is the bottleneck. |
 | **Invalid JSON file** | `validate_input.py` rejects it |
 | **Non-JSON format** | Not supported for demo day |
+
+---
+
+*This document defines every data structure in the F2 pipeline. For the reasoning behind these structures, see research.md. For how to run the pipeline, see quickstart.md. For the formal agreements between F2 and other features, see contracts.md.*
