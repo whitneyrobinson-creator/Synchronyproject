@@ -4,7 +4,7 @@
 **Created**: 2026-04-09
 **Status**: Draft
 **Owner**: Whitney Robinson (PM), Sheila Green, Molly Lowell
-EADME
+
 ---
 
 ## 1. What This Document Covers
@@ -187,9 +187,9 @@ This way F2 always gets the same shape back. No special error handling needed.
 
 | Confidence | What It Means | When It Happens |
 |---|---|---|
-| **High** | Claude found 2 or more strong clues that agree with each other | Clear field name + helpful comment, or clear name + informative type, etc. |
-| **Medium** | Claude found 1 strong clue, OR found multiple clues that conflict | Decent field name but nothing else to confirm it, or name says one thing and comment says another |
-| **Low** | Claude found 0 strong clues | Opaque field name, no comments, generic type, no constraints, no enums |
+| `"High"` | Claude found 2 or more strong clues that agree with each other | Clear field name + helpful comment, or clear name + informative type, etc. |
+| `"Medium"` | Claude found 1 strong clue, OR found multiple clues that conflict | Decent field name but nothing else to confirm it, or name says one thing and comment says another |
+| `"Low"` | Claude found 0 strong clues | Opaque field name, no comments, generic type, no constraints, no enums |
 
 ### What Counts as a Strong vs. Weak Clue
 
@@ -203,13 +203,13 @@ This way F2 always gets the same shape back. No special error handling needed.
 
 ### Scoring Rules
 
-1. **Count the strong clues.** 0 = Low. 1 = Medium. 2+ agreeing = High.
+1. **Count the strong clues.** 0 = `"Low"`. 1 = `"Medium"`. 2+ agreeing = `"High"`.
 
-2. **Conflict penalty.** If any clue contradicts another, drop confidence by one level. A field with 2 strong clues that conflict = Medium (not High). Note the conflict in `evidence_refs`.
+2. **Conflict penalty.** If any clue contradicts another, drop confidence by one level. A field with 2 strong clues that conflict = `"Medium"` (not `"High"`). Note the conflict in `evidence_refs`.
 
 3. **Restated comments don't count.** If the schema comment just repeats the field name in different words, it's not a separate clue. Score as if the comment weren't there.
 
-4. **Low always gets flagged.** If confidence is Low, `clarification_flag` must be `true`. Always.
+4. **Low always gets flagged.** If confidence is `"Low"`, `clarification_flag` must be `true`. Always.
 
 5. **Missing input lowers confidence.** If F2 didn't provide a field (e.g., no `type`), note it in `evidence_refs` and drop confidence by one level.
 
@@ -217,18 +217,18 @@ This way F2 always gets the same shape back. No special error handling needed.
 
 | Situation | What Happens |
 |---|---|
-| 2 strong clues that agree, no conflicts | High |
-| 2 strong clues that conflict | Medium (dropped from High) |
-| 1 strong clue, no conflicts | Medium |
-| 1 strong clue + 1 conflict | Low (dropped from Medium) |
-| 0 strong clues | Low, flag = true |
-| 3+ strong clues, 1 conflict | Medium (dropped from High) |
-| Field name is a single character (e.g., `X`) | Field name = Weak. Probably Low unless other clues are strong. |
-| Every field in the table is ambiguous | Every field gets Medium or Low. Claude doesn't inflate scores to look useful. |
+| 2 strong clues that agree, no conflicts | `"High"` |
+| 2 strong clues that conflict | `"Medium"` (dropped from `"High"`) |
+| 1 strong clue, no conflicts | `"Medium"` |
+| 1 strong clue + 1 conflict | `"Low"` (dropped from `"Medium"`) |
+| 0 strong clues | `"Low"`, flag = `true` |
+| 3+ strong clues, 1 conflict | `"Medium"` (dropped from `"High"`) |
+| Field name is a single character (e.g., `X`) | Field name = Weak. Probably `"Low"` unless other clues are strong. |
+| Every field in the table is ambiguous | Every field gets `"Medium"` or `"Low"`. Claude doesn't inflate scores to look useful. |
 | Comment just restates the field name | Doesn't count. Score as if comment were missing. |
 | Field name has dots (e.g., `default.payment.next.month`) | Claude treats the full string as the name and interprets it as best it can. |
 | `type` is missing from input | Note it, drop confidence one level, describe from remaining clues. |
-| `type` AND `schema_comments` both missing | Drop confidence for each. Floor is Low. |
+| `type` AND `schema_comments` both missing | Drop confidence for each. Floor is `"Low"`. |
 
 ---
 
@@ -247,7 +247,7 @@ When F2 gets the JSON back from Claude, it runs these checks before accepting it
 | VR-07 | Is `evidence_refs` a list with at least one entry? | Empty evidence means no audit trail. |
 | VR-08 | Is `clarification_flag` a true/false value? | Anything else breaks downstream logic. |
 
-**If any of these fail:** F2 rejects the entire batch and retries. Maximum 2 retries (3 total attempts). If it still fails after 3 attempts, F2 stops and alerts the team.
+**If any of these fail:** F2 rejects the entire batch and retries. F2 owns retry logic — maximum 2 retries (3 total attempts). If it still fails after 3 attempts, F2 stops and alerts the team.
 
 ### Flag-and-Continue Checks (Log It, Keep Going)
 
@@ -255,7 +255,7 @@ When F2 gets the JSON back from Claude, it runs these checks before accepting it
 |---|---|---|
 | VR-04 | Does each `field_name` in the output match the input exactly? | Claude sometimes "corrects" casing or formatting. |
 | VR-05 | Is each `description` ≤25 words? | Occasionally Claude goes slightly over. |
-| VR-09 | If confidence is Low, is `clarification_flag` true? | The rubric requires this. If Claude missed it, F2 can auto-correct. |
+| VR-09 | If confidence is `"Low"`, is `clarification_flag` true? | The rubric requires this. If Claude missed it, F2 can auto-correct. |
 | VR-12 | Are the output fields in the same order as the input? | Nice to have. F2 can reorder by matching `field_name` if needed. |
 | VR-13 | Are there any duplicate `field_name` values? | Shouldn't happen, but worth catching. |
 
