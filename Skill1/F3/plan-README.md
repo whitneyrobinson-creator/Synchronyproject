@@ -19,6 +19,20 @@ These assets serve three roles:
 
 All assets are static files (Markdown and JSON). No code executes. F3 has no runtime dependencies — assets are created offline and consumed by F1 (SKILL.md) and F2 (scripts) at pipeline execution time. Creation is AI-assisted with mandatory team review and sign-off before use.
 
+### QA Report Structure (Authoritative Section Names)
+
+The QA report template (`qa_report_template.md`) defines the following sections. These names are the single source of truth (FR-F3-005) — F2's `generate_qa_report.py` must use these exact names.
+
+| Section | What It Contains | Always Present? |
+|---------|-----------------|-----------------|
+| Report Header | Table name, field count, run timestamp, pipeline version | Yes |
+| 1. Coverage Statistics | How many fields got descriptions, percentage, placeholder count | Yes |
+| 2. Confidence Distribution | Counts and percentages of High, Medium, Low, and N/A confidence fields | Yes |
+| 3. Fields Requiring Clarification | List of fields where `clarification_flag` is `true` | Yes |
+| 4. Merge Corrections | Table of corrections applied by `attach_citations.py` | Only if corrections exist |
+| 5. Warnings | Warnings from `extract_fields.py`, LLM output validation issues, missing LLM output | Only if warnings exist |
+| 6. Processing Notes | LLM availability, fields processed, batching info, run timestamp | Yes |
+
 ---
 
 ## Technical Context
@@ -49,12 +63,23 @@ All assets are static files (Markdown and JSON). No code executes. F3 has no run
 
 **Constraints** (rules F3 must follow):
 - Templates must define the exact same columns and sections that F1 and F2 expect to produce — if there's a mismatch, the pipeline breaks
-- `sample_schema.json` must use the exact field structure F2's scripts expect to read: `field_name`, `type`, `nullable`, `constraints`, `enums`, `schema_comments`
+- `sample_schema.json` must include three required top-level keys: `table_name`, `source_file`, and `fields`. Per-field keys: `field_name` (required), plus optional `type`, `nullable`, `constraints`, `enums`, `schema_comments`. This matches F2's input contract (see F2 data-model.md Section 1).
 - Every description in the gold standard must be 25 words or fewer (FR-007)
 - No actual data values from the UCI dataset — only metadata (field names, types, constraints), never the real numbers or personal information
 - JSON format only for demo day — YAML and DDL (SQL-based schema format) are future extensions, not supported now
+- **Missing template = hard stop.** If F2's `assemble_output.py` or `generate_qa_report.py` can't find its template file, the script stops with a clear error message. This is a setup error, not a graceful degradation scenario. No fallback templates, no raw JSON dump. See contracts.md (Contract 2: F3 → F2) for the full agreement.
 
 **Scale/Scope**: 6 asset files covering 25 fields from the UCI Credit Card dataset. That's the full scope for demo day. After handoff, Synchrony creates their own versions of the sample schema and gold standard using their real data — but the templates stay the same.
+
+### Gold Standard Update Process
+
+The gold standard connects to two other files: the QA report gold standard (stats are derived from it) and the SKILL.md (3 worked examples may be copied from it). Changing the gold standard without checking the chain creates inconsistencies. A 5-step update process is defined in quickstart.md:
+
+1. Make the edit in `example_data_dictionary.md`
+2. Check if the confidence level or clarification_flag changed → update `example_qa_report.md` if so
+3. Check if the edited field is one of the 3 worked examples in SKILL.md → update SKILL.md if so
+4. Verify the numbers add up (High + Medium + Low + N/A = 25)
+5. Team review and sign-off
 
 ---
 
@@ -65,7 +90,7 @@ All assets are static files (Markdown and JSON). No code executes. F3 has no run
 | Constitution Principle | F3 Compliance | How |
 |---|---|---|
 | **Principle 1: Accuracy Over Speed** | ✅ Pass | Gold standard examples are manually verified against Kaggle documentation before use. Templates include `confidence` and `evidence_refs` columns to ensure every generated description is traceable. No shortcuts — team reviews and signs off on every asset (Definition of Done). |
-| **Principle 2: Graceful Degradation** | ✅ Pass | F3 assets are static files — they don't depend on the LLM being online. If Claude goes down, the templates and sample schema still exist and can be used manually. The gold standard examples also serve as a "what correct output looks like" reference if the team needs to write descriptions by hand during an outage. |
+| **Principle 2: Graceful Degradation** | ✅ Pass | F3 assets are static files — they don't depend on the LLM being online. If Claude goes down, the templates and sample schema still exist and can be used manually. The gold standard examples also serve as a "what correct output looks like" reference if the team needs to write descriptions by hand during an outage. **Note:** A missing template is NOT a graceful degradation scenario — it's a setup error. F2 stops with a clear error message. |
 | **Principle 3: Simplicity First** | ✅ Pass | F3 is the simplest feature in the project: 6 files in a folder. No code, no dependencies, no services. Markdown and JSON only. |
 | **Principle 4: Audit-Ready by Default** | ✅ Pass | Templates are designed with audit reviewers in mind — the data dictionary template includes `confidence`, `evidence_refs`, and `clarification_flag` columns so every entry can be traced back to its evidence. The QA report template includes coverage statistics and flagged items. |
 | **Never-Ever Rules** | ✅ Pass | `sample_schema.json` contains only field metadata (names, types, constraints) — no actual data values, no PII, no API keys, no credentials. Enum values like `[1, 2]` for the SEX field are structural metadata describing allowed values, not personal data. No raw dataset content is included in any F3 asset. |
@@ -83,7 +108,7 @@ All assets are static files (Markdown and JSON). No code executes. F3 has no run
 
     specs/f3-assets-data-dictionary/
     ├── plan.md              # This file
-    ├── research.md          # Phase 0 — benchmark analysis, regulatory mapping, FDIC dataset findings
+    ├── research.md          # Phase 0 — decisions, reasoning, and findings from the planning process
     ├── data-model.md        # Phase 1 — structures for templates, sample schema, and gold standard
     ├── quickstart.md        # Phase 1 — how to use, update, and validate F3 assets
     ├── contracts/           # Phase 1 — input/output agreements between F3 → F1 and F3 → F2
