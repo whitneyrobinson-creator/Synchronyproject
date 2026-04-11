@@ -27,6 +27,7 @@ F2 sends a JSON object with the table name and a list of fields.
 ```json
 {
   "table_name": "credit_card_clients",
+  "source_file": "sample_schema.json",
   "fields": [
     {
       "field_name": "AGE",
@@ -46,6 +47,7 @@ F2 sends a JSON object with the table name and a list of fields.
 | Field | What It Is | Required? |
 |---|---|---|
 | `table_name` | The name of the table these fields belong to. Claude needs this to understand context and keep related fields consistent. | **Yes** |
+| `source_file` | The name of the original data source file (e.g., `"sample_schema.json"`). Used to build `source_path` for each field. | **Yes** |
 | `field_name` | The column name exactly as it appears in the schema. Case-sensitive — `PAY_0` stays `PAY_0`. | **Yes** |
 | `type` | The data type — `INTEGER`, `VARCHAR`, `DATE`, `BOOLEAN`, etc. | No |
 | `nullable` | Can this field be empty? `true` or `false`. | No |
@@ -54,13 +56,18 @@ F2 sends a JSON object with the table name and a list of fields.
 | `source_path` | Where F2 found this field in the schema file. | No |
 | `schema_comments` | Any human-written notes from the schema. `null` if there aren't any. | No |
 
-**The rule:** `table_name` and `field_name` are the only required fields. Everything else can be missing or null. When something is missing, Claude notes it and lowers confidence — it doesn't break.
+**The rule:** `table_name`, `source_file`, and `field_name` are the only required fields. Everything else can be missing or null. When something is missing, Claude notes it and lowers confidence — it doesn't break.
+
+**Validation rule:** `field_name` must be a non-empty string. If `field_name` is an empty string, whitespace-only, or null, F2 must reject the field before sending it to the SKILL.md. This is a pre-LLM validation check owned by F2 (`validate_input.py`).
+
+**Extra fields:** If the input contains fields beyond those listed above, the SKILL.md must ignore them. `evidence_refs` must only cite the contracted input signals (`field_name`, `type`, `nullable`, `constraints`, `enums`, `source_path`, `schema_comments`). Claude must not reference any additional fields in its output, even if they are present in the input.
 
 ### Full Example (3 fields)
 
 ```json
 {
   "table_name": "credit_card_clients",
+  "source_file": "sample_schema.json",
   "fields": [
     {
       "field_name": "AGE",
@@ -108,6 +115,8 @@ The SKILL.md returns a JSON list — one object per field, in the same order it 
 | `confidence` | How confident Claude is, based on the rubric (see Section 4). | `"High"`, `"Medium"`, or `"Low"` |
 | `evidence_refs` | The specific clues Claude used and why they led to that confidence score. | A list with at least one entry |
 | `clarification_flag` | Does this field need a human to look at it? | `true` or `false` |
+
+**Word count rule:** Words are counted by splitting on whitespace. Hyphenated terms count as one word. Contractions count as one word. Technical terms with underscores (e.g., `source_path`) count as one word. F2 uses the same counting method when checking VR-05.
 
 ### Example: High Confidence
 
@@ -229,6 +238,11 @@ This way F2 always gets the same shape back. No special error handling needed.
 | Field name has dots (e.g., `default.payment.next.month`) | Claude treats the full string as the name and interprets it as best it can. |
 | `type` is missing from input | Note it, drop confidence one level, describe from remaining clues. |
 | `type` AND `schema_comments` both missing | Drop confidence for each. Floor is `"Low"`. |
+| `field_name` is empty string or whitespace-only | F2 rejects the field before it reaches the SKILL.md. Not sent to Claude. |
+| Field name contains special characters (e.g., `@`, `#`, newlines) | Claude echoes the `field_name` exactly as received. If special characters would break JSON output formatting, F2's VR-01 catches the malformed JSON and retries. |
+| Field name is extremely long (100+ characters) | Claude echoes it back and writes a description as normal. No length limit is enforced. If combined input approaches context window limits, F2's batching logic applies. |
+| Enums list is very large (100+ values) | Claude reads all values but may summarize rather than list each one in `evidence_refs`. Large enum lists consume context window space — F2 should account for this in token estimation. |
+| Duplicate field names in the input array | Claude processes each occurrence independently and returns one output object per input object. Descriptions may differ if surrounding context differs. F2's VR-13 flags duplicates in the output. The SKILL.md does not deduplicate — that is F2's responsibility. |
 
 ---
 
@@ -258,6 +272,7 @@ When F2 gets the JSON back from Claude, it runs these checks before accepting it
 | VR-09 | If confidence is `"Low"`, is `clarification_flag` true? | The rubric requires this. If Claude missed it, F2 can auto-correct. |
 | VR-12 | Are the output fields in the same order as the input? | Nice to have. F2 can reorder by matching `field_name` if needed. |
 | VR-13 | Are there any duplicate `field_name` values? | Shouldn't happen, but worth catching. |
+| VR-14 | Does any `evidence_ref` cite a signal that was null or absent in the input? (e.g., references "schema_comments" when `schema_comments` was null) | Catches hallucinated evidence automatically instead of relying solely on human spot-checks. |
 
 **If any of these fail:** F2 logs the issue and flags it for manual review, but doesn't reject the batch.
 
@@ -267,6 +282,8 @@ When F2 gets the JSON back from Claude, it runs these checks before accepting it
 |---|---|---|
 | VR-10 | Do the `evidence_refs` actually reference clues from the input? | Makes sure Claude cited real signals, not made-up ones. |
 | VR-11 | Did Claude cite a signal that wasn't in the input? (e.g., referencing a comment when there was none) | Catches hallucinated evidence. |
+
+VR-14 provides automated first-pass detection of hallucinated evidence. VR-10 and VR-11 remain as human verification for subtler issues (e.g., Claude citing a signal correctly but misinterpreting its meaning).
 
 ---
 
