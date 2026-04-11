@@ -20,6 +20,8 @@ This is the canonical layout of the repository when all three Data Dictionary fe
 ```
 synchrony-doc-automation/                    # Repository root
 │
+├── .gitignore                               # Excludes output/, __pycache__/, *.pyc
+│
 ├── skills/
 │   └── data-dictionary/
 │       ├── SKILL.md                         # F1 — LLM instruction file
@@ -80,6 +82,7 @@ synchrony-doc-automation/                    # Repository root
 - `output/` and `output/intermediate/` are created at runtime by F2 scripts via `os.makedirs()`. They are not checked into the repository.
 - `assets/` is at the repository root, not inside `skills/`.
 - `specs/` contains planning documentation only. Nothing in `specs/` is read at runtime.
+- For demo day, the LLM step is performed manually via Claude Desktop. No programmatic API calls are made. Programmatic API integration is documented as a future extension.
 
 ---
 
@@ -362,4 +365,3 @@ A documentation team member provides a current schema and a prior version. The s
 | **SC-013** | ≥ 95% of pass/fail counts in the test evidence summary match the actual test results provided as input | Output Quality |
 | **SC-014** | ≥ 90% of test results in the test evidence summary are linked to their corresponding test file and code under test | Traceability |
 | **SC-015** | ≥ 90% of applicable document types are successfully generated when the Doc Pack is invoked for a repository | Processing Reliability |
-
