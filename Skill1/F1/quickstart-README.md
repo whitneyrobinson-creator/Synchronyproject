@@ -28,6 +28,8 @@ Go to [claude.ai](https://claude.ai) or open Claude Desktop. Start a new convers
 
 Open the file at `skills/data-dictionary/SKILL.md`. Copy the entire thing. Paste it into the Claude conversation.
 
+**Verify the paste:** After pasting, scroll to the bottom of what you pasted. You should see the last worked example (the Low confidence example for col_x7). If you don't see it, the paste was truncated — copy and paste again. A truncated SKILL.md will produce unpredictable output.
+
 ### Step 3: Paste Your Test Input
 
 Copy the test input below and paste it right after the SKILL.md:
@@ -35,6 +37,7 @@ Copy the test input below and paste it right after the SKILL.md:
 ```json
 {
   "table_name": "credit_card_clients",
+  "source_file": "sample_schema.json",
   "fields": [
     {
       "field_name": "AGE",
@@ -50,7 +53,7 @@ Copy the test input below and paste it right after the SKILL.md:
       "nullable": true,
       "constraints": [],
       "enums": [],
-      "schema_comments": ""
+      "schema_comments": null
     },
     {
       "field_name": "X1",
@@ -58,7 +61,7 @@ Copy the test input below and paste it right after the SKILL.md:
       "nullable": true,
       "constraints": [],
       "enums": [],
-      "schema_comments": ""
+      "schema_comments": null
     }
   ]
 }
@@ -202,7 +205,19 @@ This is the last resort. If the examples and rubric are fine but the output is s
 
 ---
 
-## 8. Quick Reference
+## 8. Demo Day Contingency
+
+If Claude is unavailable or producing unreliable output during the demo, use the cached backup:
+
+1. **Before demo day:** After a successful baseline test run, save the `llm_output.json` from `output/intermediate/`. This is your backup.
+2. **During the demo:** If Claude is down, slow, or returning malformed output, use the cached `llm_output.json` instead. Place it in `output/intermediate/` and continue the pipeline from Step 5 (merge and validate).
+3. **What to say:** "We have a cached output from our baseline testing — this demonstrates the graceful degradation we built into the pipeline."
+
+The rest of the pipeline (F2 scripts, F3 templates) runs identically whether the LLM output is live or cached. The audience sees the same final `data_dictionary.md` and `qa_report.md` either way.
+
+---
+
+## 9. Quick Reference
 
 | Item | Location |
 |---|---|
