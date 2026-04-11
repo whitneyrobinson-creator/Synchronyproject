@@ -198,11 +198,11 @@ The team will manually score F1's output against the 6 success criteria (SC-F1-0
 
 ## 7. Open Research Questions
 
-| # | Question | Status | Impact |
-|---|---|---|---|
-| 1 | Can profiling stats (min/max, null %, distributions) improve confidence scoring? | Deferred — future enhancement | Would add new signal types to the rubric |
-| 2 | Does batch size affect output quality? (25 fields vs. 10 fields per pass) | TBD — test during baseline | May require adjusting F2's batching thresholds |
-| 3 | How stable is output across Claude model versions? | TBD — test if model updates occur before demo day | May require SKILL.md adjustments |
+| # | Question | Status | Impact | Priority |
+|---|---|---|---|---|
+| 1 | Can profiling stats (min/max, null %, distributions) improve confidence scoring? | Deferred — future enhancement | Would add new signal types to the rubric | Low — post-demo |
+| 2 | Does batch size affect output quality? (25 fields vs. 10 fields per pass) | **Must test during baseline** — if the SKILL.md + 25 fields approaches the context window limit, Claude may silently drop fields from the response. F2's VR-02 catches the mismatch, but retrying with the same oversized input fails again. This question directly determines F2's batching threshold. | May require adjusting F2's batching thresholds; blocks reliable processing of large schemas | **High — must resolve before demo day** |
+| 3 | How stable is output across Claude model versions? | TBD — test if model updates occur before demo day | May require SKILL.md adjustments | Medium — monitor |
 
 ---
 
