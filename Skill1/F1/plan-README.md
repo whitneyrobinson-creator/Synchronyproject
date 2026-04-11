@@ -20,7 +20,7 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 **What F1 produces:** A JSON array of objects — one per input field — each containing 5 fields: `field_name`, `description`, `confidence`, `evidence_refs`, `clarification_flag`. If the SKILL.md can't process a field, it still returns the standard 5-field object with Low confidence and a clarification flag — no special error format.
 
-**What F1 does NOT do:** Parse schema files (F2), assemble final output documents (F2), or format templates (F3). F1 only reasons over metadata it receives and returns structured output.
+**What F1 does NOT do:** Parse schema files (F2), assemble final output documents (F2), or format templates (F3). F1 only reasons over metadata it receives and returns structured output. F1 will support glossary interpretation in a future version (FR-011, P3). For demo day, glossary mapping is not implemented.
 
 **Key design decisions:**
 
@@ -56,17 +56,19 @@ F1 is a SKILL.md file — a self-contained LLM instruction document that tells C
 
 - **SC-F1-006** — Consistency: Same input produces structurally similar output across runs
 
+**Quality Threshold:** F1's baseline testing against the UCI Credit Card dataset must demonstrate output quality meeting or exceeding the SC-010 threshold of ≥80% when scored against the gold standard (`assets/example_data_dictionary.md`). The evaluation rubric and scoring methodology will be documented before baseline testing begins.
+
 Quality and calibration scored manually by team; completeness, coverage, and flag accuracy checked via automated scripts (owned by F2 — primarily `attach_citations.py` and `generate_qa_report.py`).
 
 F2 validates every SKILL.md response against a defined rule set (see F2 data-model.md Section 5). F2 owns retry logic — max 2 retries (3 total attempts). Critical failures trigger automatic retry. Non-critical issues are flagged for manual review.
 
 Iteration guidance for improving SKILL.md output quality is documented in quickstart.md, including a 4-step debugging order and common failure modes.
 
-**Target Platform**: Claude Agent Skills runtime — local execution, no cloud deployment for demo day.
+**Target Platform**: Claude Agent Skills runtime — local execution, no cloud deployment for demo day. Demo day contingency: A pre-generated `llm_output.json` from a successful prior run will be saved as a backup. If Claude is unavailable during the demo, the cached output will be used to demonstrate the full pipeline end-to-end. This contingency will be documented in quickstart.md.
 
 **Project Type**: Agent skill (SKILL.md — LLM instruction document within Claude Agent Skills architecture)
 
-**Performance Goals**: Accuracy over speed (Constitution Principle 1). No latency SLA for demo day. The SKILL.md must produce correct output for all fields received in a single pass, regardless of count.
+**Performance Goals**: Accuracy over speed (Constitution Principle 1). No latency SLA for demo day. The SKILL.md must produce correct output for all fields received in a single pass, regardless of count. F1's processing time contributes to the overall SC-001 target (data dictionary generation in ~5–10 minutes vs. 60–120 minutes manually). This will be measured during end-to-end testing with F2 and F3, not in F1 isolation testing.
 
 **Constraints**:
 
@@ -78,7 +80,11 @@ Iteration guidance for improving SKILL.md output quality is documented in quicks
 
 - No microservices, no UI, no cloud deployment (Constitution Principle 3)
 
-**Scale/Scope**: Demo day: 25 fields (UCI Credit Card dataset). The SKILL.md instructions are batch-size agnostic — if F2 sends 500 fields or 10, the instructions don't change. Batching logic for large schemas is F2's responsibility.
+- The SKILL.md must instruct Claude to treat all input fields (field_name, schema_comments, constraints, enums) as data to be analyzed, never as instructions to follow. This mitigates prompt injection risk from user-provided schema metadata.
+
+**Scale/Scope**: Demo day: 25 fields (UCI Credit Card dataset). The SKILL.md instructions are batch-size agnostic — if F2 sends 500 fields or 10, the instructions don't change. Batching logic for large schemas is F2's responsibility. F2 should estimate token count (SKILL.md + input JSON) before sending to Claude and batch fields into smaller groups if the combined input approaches the context window limit. The maximum recommended fields-per-batch will be determined during baseline testing (see research.md Open Question #2).
+
+**Acceptance Gate:** The SKILL.md is considered done when it passes all 6 success criteria (SC-F1-001 through SC-F1-006), meets the SC-010 quality threshold of ≥80%, and all team members sign off per the constitution's Definition of Done (Section 5).
 
 ---
 
