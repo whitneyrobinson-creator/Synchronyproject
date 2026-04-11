@@ -1,84 +1,93 @@
-# Implementation Plan: F5 — SKILL.md (RCSA)
+# F5 — SKILL.md: RCSA Control Narrative Generation — Plan
 
-**Branch**: `005-skill-rcsa` | **Date**: 2026-04-10 | **Spec**: `/specs/005-skill-rcsa/spec.md`
-
-**Input**: Feature specification from `/specs/005-skill-rcsa/spec.md`
-
----
-
-## Summary
-
-F5 (SKILL.md — RCSA) defines the natural language instructions that guide an LLM agent through a Risk Control Self-Assessment workflow. Built first in the F5 → F4 → F6 sequence due to its high-risk LLM dependency, the SKILL.md serves as the workflow orchestrator — sequencing calls to F6 deterministic scripts (input validation, artifact registry building, evidence mapping, citation validation) and performing its own reasoning between script calls: generating per-control narratives, assigning confidence tiers (HIGH/MEDIUM/LOW), and flagging gaps where zero evidence exists.
-
-The LLM receives pre-processed evidence as file paths with content snippets, and produces two output documents:
-
-- **`rcsa_control_narratives.md`** — Markdown with YAML front matter containing a summary table, per-control narratives, inline citations, confidence tiers, and gap flags
-- **`validation_report.md`** — Citation resolution statistics
-
-Output structure is defined inline within the SKILL.md since F4 templates are formalized afterward. The skill is framework-agnostic — controls are provided as input — with four demo controls for initial development: Access Control, Change Management, Data Quality, and Incident Handling. Ambiguous evidence is excluded and flagged for human review rather than included, prioritizing accuracy over coverage to prevent hallucination in compliance outputs.
+**Feature Branch**: `f5-rcsa-skill`
+**Created**: 2026-04-07
+**Updated**: 2026-04-11
+**Status**: Draft
+**Phase**: 2
 
 ---
 
-## Technical Context
+## Section 1: Summary
 
-| Field | Value |
-|-------|-------|
-| **Language/Version** | N/A — SKILL.md is a natural language instruction file, not executable code |
-| **Primary Dependencies** | F6 (Scripts — RCSA), F4 (Assets — RCSA), LLM agent runtime |
-| **Storage** | N/A — produces Markdown files; persistence handled by agent platform and F6 |
-| **Target Platform** | LLM agent runtime (framework-agnostic) |
-| **Project Type** | Agent skill definition (natural language instruction file) |
+F5 is the SKILL.md file — the natural language instruction set that tells the LLM agent how to generate citation-backed RCSA control narratives from pre-processed mapped evidence. It is the orchestrator of the RCSA workflow: it calls F6 scripts as tools, reasons over the structured data they return, and produces two audit-ready output documents.
 
-### Testing
+**What F5 does:**
+- Orchestrates the 6-step RCSA workflow (validate → build registry → map evidence → generate narratives → validate citations → assemble output)
+- Generates 3–5 sentence auditor-friendly narratives per control with inline citations
+- Flags explicit [GAP] statements when evidence is missing or insufficient
+- Assigns confidence tiers (HIGH / MEDIUM / LOW) based on evidence strength
+- Produces a summary table for at-a-glance compliance posture
+- Follows defined output structure for consistent formatting
 
+**What F5 does NOT do:**
+- Parse raw files (F6 handles this)
+- Validate input format (F6 handles this)
+- Validate citations post-generation (F6 handles this)
+- Define reusable templates (F4 handles this)
+- Handle graceful degradation when the LLM fails (F6 handles this)
+
+**Key decisions from research:**
+- Orchestration model: SKILL.md is the conductor — calls scripts and reasons in between
+- Gap handling: Flag only — no remediation suggestions
+- Confidence tiers: HIGH / MEDIUM / LOW (separate from GAP flags)
+- Framework-agnostic: Controls provided as input, not hardcoded
+- Output: Markdown with YAML front matter
+- Edge cases: Weak evidence → LOW confidence narrative; ambiguous mappings → exclude and flag
+
+---
+
+## Section 2: Technical Context
+
+**Language/Version**: N/A — SKILL.md is a natural language instruction file, not executable code
+
+**Primary Dependencies**:
+- F6 (Scripts — RCSA) — deterministic tools the SKILL.md orchestrates
+- F4 (Assets — RCSA) — templates formalized after F5 establishes output structure
+- LLM agent runtime (platform-specific, not owned by F5)
+
+**Storage**: N/A — F5 produces Markdown files; persistence handled by agent platform and F6 scripts
+
+**Testing**: Manual evaluation + automated validation
 - **Priority 1**: Gap detection accuracy — zero false negatives on missing evidence
 - LLM output quality assessed via rubric (narrative completeness, citation accuracy, confidence tier correctness)
 - Citation validation handled by F6 scripts (`validation_report.md`)
 - Edge case testing: zero-evidence controls, single weak artifact, ambiguous mappings, multi-control artifacts
 
-### Performance Goals
+**Target Platform**: LLM agent runtime (framework-agnostic)
 
-| Metric | Target | Source |
-|--------|--------|--------|
-| Single control narrative | ≤ 30 seconds | NFR-001 |
-| Full RCSA assessment (4 controls) | ≤ 120 seconds | NFR-002 |
-| Per-LLM-call ceiling | ≤ 90 seconds | Constitution |
-| Evidence file processing | ≤ 5 seconds per file | NFR-003 (F6 responsibility) |
+**Project Type**: Agent skill definition (natural language instruction file)
 
-### Constraints
+**Performance Goals**: NEEDS CLARIFICATION — latency/throughput targets for a full RCSA assessment run
 
+**Constraints**:
 - LLM context window must accommodate all evidence snippets per run; if evidence exceeds limits, chunking/prioritization is an F6 responsibility but F5 must handle partial input gracefully
 - Anti-hallucination: exclude ambiguous evidence, flag for human review
 - Gap flags must have zero false negatives
 
-### Scale/Scope
-
-- **Demo**: 4 controls, small codebase
-- **Production**: NEEDS CLARIFICATION — Synchrony's control count and codebase size unknown; framework-agnostic design ensures adaptability
-
----
-
-## Constitution Check
-
-> **GATE**: Must pass before Phase 0 research. Re-check after Phase 1 design.
-
-| Gate | Status | Evidence |
-|------|--------|----------|
-| Max 3 projects per repo | ✅ PASS | F5 is one feature within the existing repo structure |
-| No unnecessary abstractions | ✅ PASS | SKILL.md is a single flat file — no abstraction layers |
-| Each LLM call ≤ 90 seconds | ✅ PASS | NFR-001 targets 30s per control; **risk noted** — monitor multi-pass reasoning against 90s ceiling |
-| Framework-agnostic design | ✅ PASS | Controls provided as input, no framework hardcoded |
-| F5 → F4 → F6 build order | ✅ PASS | F5 built first; output structure defined inline for F4 to formalize later |
-| Deterministic logic in scripts only | ✅ PASS | SKILL.md orchestrates F6 scripts for mechanical work; LLM handles reasoning only |
-| Anti-hallucination guardrails | ✅ PASS | Ambiguous evidence excluded, gap flags zero false negatives, citation validation via F6 |
-
-**No violations. One risk flagged for monitoring.**
+**Scale/Scope**:
+- Demo: 4 controls, small codebase
+- Production: NEEDS CLARIFICATION — target control count and codebase size
 
 ---
 
-## Project Structure
+## Section 3: Constitution Check
 
-### Documentation (this feature)
+**Principle 1 — Accuracy Over Speed**: F5 enforces this directly. The SKILL.md instructs the LLM to never imply compliance without proof, prefer GAP flags over uncertain claims, and cite only artifacts present in the registry. This is the hardest constraint in the system.
+
+**Principle 2 — Graceful Degradation**: Not F5's responsibility. If the LLM fails, F6 scripts handle fallback. However, F5 must produce parseable output so F6 can validate it even if the narratives are imperfect.
+
+**Principle 3 — Simplicity First**: F5 is a single Markdown file. No code, no dependencies, no configuration. The orchestration is expressed as natural language steps, not a state machine.
+
+**Principle 4 — Audit-Ready by Default**: F5 produces two documents designed for auditor review: `rcsa_control_narratives.md` (the deliverable) and `validation_report.md` (the QA check). Every claim has a citation. Every gap is flagged.
+
+**Never-Ever Rules**: F5 instructs the LLM to work only with provided evidence. No external knowledge, no assumptions about the repository, no raw PII, no credentials.
+
+---
+
+## Section 4: Project Structure
+
+**Documentation (this feature)**
 
 ```text
 specs/005-skill-rcsa/
@@ -86,33 +95,65 @@ specs/005-skill-rcsa/
 ├── research.md          # Phase 0 output (interview decisions)
 ├── data-model.md        # Phase 1 output (input/output schemas)
 ├── quickstart.md        # Phase 1 output (how to run/test the skill)
-├── contracts/           # Phase 1 output (F5↔F4, F5↔F6 interfaces)
+├── contracts.md         # Phase 1 output (F5↔F4, F5↔F6 interfaces)
 └── tasks.md             # Phase 2 output (implementation tasks)
 ```
 
-### Source Code (repository root)
+**Source Code (repository root)**
 
 ```text
-skills/
-└── rcsa/
-    ├── SKILL.md                    # The agent skill file (primary deliverable)
-    └── examples/
-        ├── sample_input.yaml       # Demo evidence input (4 controls)
-        └── expected_output/
-            ├── rcsa_control_narratives.md
-            └── validation_report.md
+.cursor/skills/rcsa/
+├── SKILL.md                          # F5 — The agent skill file (primary deliverable)
+├── scripts/                          # F6
+│   ├── validate_input.py
+│   ├── build_registry.py
+│   ├── map_evidence.py
+│   ├── orchestrate_llm.py
+│   ├── validate_citations.py
+│   └── write_output.py
+└── assets/                           # F4
+    ├── templates/
+    ├── sample-data/
+    └── citation_format.md
 ```
 
-**Structure Decision**: Single flat skill directory. No `src/`, `models/`, or `services/` needed — F5 is a natural language file, not a code project. The `examples/` directory provides testable reference inputs and expected outputs for validation during development.
+**Structure Decision**: Single skill directory under `.cursor/skills/rcsa/`. F5 (SKILL.md), F6 (scripts/), and F4 (assets/) are co-located because they form a single agent skill. The `examples/` directory for F5 testing lives in `assets/sample-data/`.
 
 ---
 
-## Complexity Tracking
+## Section 5: Non-Functional Requirements
 
-> **Fill ONLY if Constitution Check has violations that must be justified.**
+**From the Constitution:**
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|--------------------------------------|
-| *None* | — | — |
+| NFR | Source | How F5 Addresses It |
+|-----|--------|-------------------|
+| Never imply compliance without proof | Principle 1 | SKILL.md explicitly instructs: "If mapped_artifacts is empty, output a [GAP] flag. Do not generate a compliance narrative." |
+| Citations must reference real artifacts | Principle 1 | SKILL.md instructs: "Only cite artifacts present in the artifact registry. Use exact file paths." F6 validates post-generation. |
+| Output must be audit-ready | Principle 4 | SKILL.md defines structured output with YAML front matter, summary table, per-control sections, and validation report. |
+| No external knowledge | Never-Ever Rules | SKILL.md instructs: "Use only the evidence provided in the input. Do not use external knowledge or assumptions about the repository." |
+| System must degrade gracefully | Principle 2 | F5 produces parseable Markdown so F6 can extract data even if narratives are imperfect. Graceful degradation logic is F6's responsibility. |
 
-No complexity justifications required. One risk was flagged (90s per-call ceiling under multi-pass reasoning) but it is not a violation — it is a monitoring item.
+**From the Feature Spec:**
+
+| NFR | Spec Reference | How F5 Addresses It |
+|-----|---------------|-------------------|
+| ≥ 85% gap detection accuracy | SC-001 | SKILL.md prioritizes GAP flags over uncertain claims. Confidence rubric is explicit. |
+| ≤ 5% hallucinated artifacts | SC-002 | SKILL.md constrains citations to registry. F6 validates. |
+| All 4 controls addressed every run | SC-003 | SKILL.md processes every control in the control library, regardless of evidence. |
+| ≥ 90% structural consistency | SC-004 | SKILL.md defines exact output structure with YAML front matter and section templates. |
+
+---
+
+## Section 6: Performance Gates
+
+| Gate | Metric | Target | How Measured |
+|------|--------|--------|-------------|
+| Gap Detection | % of true gaps correctly flagged | ≥ 85% | Test with known-gap inputs, count correct flags |
+| Citation Accuracy | % of citations referencing real artifacts | ≥ 95% | F6 `validate_citations` script output |
+| Control Coverage | Controls addressed per run | 4/4 (100%) | Count controls in output vs. input |
+| Structural Consistency | % match across repeated runs | ≥ 90% | Run same input 5x, compare output structure |
+| Narrative Quality | Rubric score vs. human-written ground truth | ≥ 80% | Manual evaluation using project rubric |
+
+---
+
+*This plan is the authoritative reference for F5 implementation. All design decisions are documented in research.md. Data schemas are in data-model.md. Interface contracts are in contracts.md. Testing procedures are in quickstart.md.*
