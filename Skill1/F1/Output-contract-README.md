@@ -42,12 +42,22 @@ A JSON list — one object per field, in the same order they were received. Ever
 ## F1's Promises
 
 1. **Every input field gets an output object.** If F2 sends 20 fields, F1 returns 20 objects. No skipping.
+
 2. **Every object has all 5 fields.** Always. No optional fields in the output.
+
 3. **`field_name` is returned exactly as received.** No case changes, no reformatting, no "corrections."
+
 4. **`confidence` is always one of three values.** `"High"`, `"Medium"`, or `"Low"`. Nothing else.
+
 5. **Low confidence always gets flagged.** If `confidence` is `"Low"`, `clarification_flag` is always `true`.
+
 6. **`evidence_refs` always cites real input signals.** Claude never invents metadata that wasn't in the input.
+
 7. **Output order matches input order.** Fields come back in the same sequence they were sent.
+
+8. **Output is raw JSON only.** No markdown code fences, no commentary, no text before or after the array. The response begins with `[` and ends with `]`.
+
+9. **Each object contains exactly 5 fields.** No additional fields are returned.
 
 ---
 
