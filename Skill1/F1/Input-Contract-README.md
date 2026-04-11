@@ -49,11 +49,18 @@ A JSON object with the table name, source file, and a list of fields.
 ## F2's Promises
 
 1. **`table_name`, `source_file`, and `field_name` are always present.** Everything else can be missing or null.
+
 2. **`field_name` is sent exactly as it appears in the schema.** No cleaning, no reformatting.
+
 3. **`source_file` is a non-empty string.** It identifies the original data source file and is used to build `source_path` for each field.
+
 4. **The `fields` list has at least one field.** F2 never sends an empty list.
+
 5. **The JSON is valid.** F2 validates the structure before sending.
+
 6. **No raw data is included.** Only metadata — never actual row values. (Constitution: Never-Ever Rules)
+
+7. **`field_name` is always a non-empty string.** F2 rejects fields where `field_name` is empty, whitespace-only, or null before sending to the SKILL.md.
 
 ---
 
@@ -71,3 +78,9 @@ If optional fields are missing, the SKILL.md still works. It just has less to go
 | Multiple fields missing | Confidence drops for each. Floor is `"Low"`. |
 
 The SKILL.md never fails on missing optional fields. It degrades gracefully.
+
+---
+
+## What Happens When Input Has Extra Fields
+
+If the input JSON contains fields beyond those listed in this contract, the SKILL.md ignores them. Evidence_refs will only cite the contracted signals listed above. Extra fields do not improve or degrade output quality — they are simply not used.
