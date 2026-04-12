@@ -142,6 +142,8 @@ Each field becomes a standardized 8-key object. Missing optional fields get defa
 
 **8 keys per field. Always 8. No exceptions.**
 
+**Note on `source_path`:** The `→` delimiter in `source_path` is a display convention, not a parsing target. No downstream script parses `source_path` — it is a human-readable breadcrumb only. If `source_file` or `table_name` contains the `→` character, the path will be visually ambiguous but functionally harmless because no code splits on this delimiter. This is a known limitation acceptable for demo day.
+
 ---
 
 ## 3. Extraction Warnings (Conditional)
@@ -317,7 +319,7 @@ Each item in the `corrections` array:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `type` | string | One of the 5 correction types (see below) |
+| `type` | string | One of the 8 correction types (see below) |
 | `original` | any | Value before correction |
 | `corrected` | any | Value after correction |
 | `reason` | string | Why the correction was made |
@@ -331,6 +333,9 @@ Each item in the `corrections` array:
 | `description_over_limit` | Description over 25 words | Keep as-is (soft limit), log for awareness |
 | `order_mismatch` | LLM returned fields in different order | Match by name, not position |
 | `duplicate_name_in_output` | LLM returned two responses for same field | Use first match, ignore second |
+| `field_name_whitespace_stripped` | `field_name` had leading/trailing whitespace | Stripped to clean name |
+| `field_name_newline_stripped` | `field_name` contained newline characters | Newlines removed |
+| `nullable_type_coerced` | `nullable` was a string instead of boolean | Coerced to boolean |
 
 ---
 
