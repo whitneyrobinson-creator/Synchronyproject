@@ -158,6 +158,16 @@ Save this as `assets/sample_schema.json` (from F3) or a local `test_inputs/sampl
 
 Run each script from the project root directory. They go in order — each one reads the previous script's output.
 
+### Step 0 (recommended): Clear previous run artifacts
+
+Delete or verify the contents of `output/intermediate/` to prevent stale data from a previous run from contaminating the current run.
+
+```bash
+rm -f skills/data-dictionary/output/intermediate/*.json
+```
+
+**Why this matters:** Intermediate files persist between pipeline runs. If a previous run produced `extraction_warnings.json` but the current run does not trigger warnings, the stale file will be read by `generate_qa_report.py`, causing phantom warnings in the QA report. Similarly, if `validate_input.py` fails on a new run but intermediate files from a previous successful run still exist, manually running subsequent scripts could accidentally process stale data.
+
 ### Step 1: Copy your test file into position
 
 ```bash
@@ -372,6 +382,7 @@ Run the same input through the pipeline 3 times. Diff the outputs. Everything sh
 | `generate_qa_report.py` says "Template not found" | F3 template is missing | Check that `assets/qa_report_template.md` exists. Steps 1–6 work without it. |
 | Timestamps are missing | `add_timestamps.py` didn't run or errored | Re-run it. Check that `merged_fields.json` exists. |
 | QA report shows corrections you didn't expect | `attach_citations.py` auto-fixed something | Open `merged_fields.json` and check the `corrections` array on the affected fields. |
+| QA report shows phantom warnings from a previous run | Stale `extraction_warnings.json` from a prior run | Delete `output/intermediate/extraction_warnings.json` and re-run, or use Step 0 to clear all intermediate files before starting |
 
 ---
 
