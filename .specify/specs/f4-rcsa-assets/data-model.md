@@ -97,9 +97,10 @@ Test object:
 **Document Sections** (in order):
 
 1. **Summary Table** — columns: Control | Confidence Tier | Evidence Found | Gaps Identified
+
 2. **Per-Control Sections** (repeated for each control):
    - `## {control_name} ({control_id})` — section heading
-   - Narrative paragraph with inline `[XX-N]` citations
+   - Narrative paragraph with inline `[file_path — description]` citations
    - Gap callout block (if applicable): `> ⚠️ GAP: {evidence_type} — no matching evidence found`
    - Evidence list: bullet list of matched evidence with citation tags
 
@@ -123,7 +124,9 @@ Test object:
 **Document Sections** (in order):
 
 1. **Citation Index Table** — columns: Citation | File Path | Lines | Status (`✅ Valid` / `❌ Invalid`)
+
 2. **Evidence Coverage Table** — columns: Control | Expected Types | Matched | Unmatched | Coverage %
+
 3. **Flagged for Human Review** — bullet list of specific gaps, unresolved citations, or anomalies requiring follow-up
 
 **Placeholder Syntax**: `{{field_name}}` — same convention as narratives template.
@@ -136,10 +139,11 @@ This file is a specification, not a template. No placeholders.
 
 | Element | Definition |
 |---|---|
-| **Tag syntax** | `[XX-N]` where `XX` = control ID, `N` = sequential number within that control |
-| **Multi-file extension** | `[XX-Na]`, `[XX-Nb]` for evidence spanning multiple files |
-| **Resolution** | Each tag maps to a `file_path` + optional `lines` range in the Citation Index |
-| **Examples** | Minimum 2 controls with worked examples showing tag → file path resolution |
+| **Tag syntax** | `[file_path — description]` where `file_path` is the relative path to the evidence file and `description` is a brief human-readable label |
+| **Separator** | ` — ` (space, em dash, space) divides the machine-readable path from the human-readable description |
+| **Multi-file evidence** | Use separate citations per file — no sub-index syntax needed |
+| **Resolution** | Each citation is self-resolving — the file path is embedded directly in the tag |
+| **Examples** | Minimum 2 controls with worked examples showing citation usage in narrative text |
 
 ---
 
