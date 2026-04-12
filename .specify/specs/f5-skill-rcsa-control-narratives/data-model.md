@@ -2,6 +2,7 @@
 
 **Feature Branch**: `f5-rcsa-skill`
 **Created**: 2026-04-10
+**Updated**: 2026-04-12
 **Status**: Draft
 **Phase**: 1
 
@@ -12,6 +13,8 @@
 This document defines the data structures that flow into, through, and out of the F5 SKILL.md. F5 is an orchestrator — it receives structured input from F6 scripts, reasons over it, and produces structured output. Every schema here represents a contract between F5 and F6.
 
 **Key principle:** F5 never parses raw files. All input arrives pre-processed and structured by F6. F5's job is reasoning, not data processing.
+
+**Control ID format:** Control IDs are uppercase 2–4 character strings (e.g., `AC`, `CM`, `DQ`, `IH`), enforced by F4's `control_library.schema.json` via regex `^[A-Z]{2,4}$`. F4's JSON files are the source of truth for control IDs.
 
 ---
 
@@ -26,7 +29,7 @@ The set of controls to assess. Framework-agnostic — any control set can be pro
 ```yaml
 # control_library.yaml
 controls:
-  - id: "AC-001"
+  - id: "AC"
     name: "Access Control"
     objective: "Ensure that access to systems and data is restricted to authorized users based on role and need."
     evidence_types:
@@ -35,7 +38,7 @@ controls:
       - "role_definitions"
       - "access_tests"
 
-  - id: "CM-001"
+  - id: "CM"
     name: "Change Management"
     objective: "Ensure that changes to production systems follow a documented review and approval process."
     evidence_types:
@@ -44,7 +47,7 @@ controls:
       - "ci_cd_pipeline"
       - "approval_workflows"
 
-  - id: "DQ-001"
+  - id: "DQ"
     name: "Data Quality"
     objective: "Ensure that data inputs are validated, sanitized, and checked for integrity before processing."
     evidence_types:
@@ -53,7 +56,7 @@ controls:
       - "data_integrity_checks"
       - "quality_tests"
 
-  - id: "IH-001"
+  - id: "IH"
     name: "Incident Handling"
     objective: "Ensure that security incidents are detected, logged, and escalated through a defined response process."
     evidence_types:
@@ -67,7 +70,7 @@ controls:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Unique control identifier. Format: `[PREFIX]-[NUMBER]` |
+| `id` | string | Yes | Unique control identifier. Uppercase 2–4 characters (regex: `^[A-Z]{2,4}$`). Defined by F4's `control_library.schema.json`. |
 | `name` | string | Yes | Human-readable control name |
 | `objective` | string | Yes | What the control is supposed to achieve. Used by the LLM to assess whether evidence supports the objective. |
 | `evidence_types` | list[string] | Yes | Types of artifacts that would constitute evidence for this control. Used by F6 for mapping and by F5 for confidence scoring. |
@@ -164,7 +167,7 @@ The output of F6's evidence mapping script. Links artifacts to controls based on
 ```yaml
 # mapped_evidence.yaml
 mappings:
-  - control_id: "AC-001"
+  - control_id: "AC"
     control_name: "Access Control"
     mapped_artifacts:
       - artifact_id: "ART-001"
@@ -177,18 +180,18 @@ mappings:
         artifact_type: "access_tests"
         relevance: "direct"
 
-  - control_id: "CM-001"
+  - control_id: "CM"
     control_name: "Change Management"
     mapped_artifacts:
       - artifact_id: "ART-004"
         artifact_type: "ci_cd_pipeline"
         relevance: "direct"
 
-  - control_id: "DQ-001"
+  - control_id: "DQ"
     control_name: "Data Quality"
     mapped_artifacts: []
 
-  - control_id: "IH-001"
+  - control_id: "IH"
     control_name: "Incident Handling"
     mapped_artifacts: []
 ```
@@ -197,7 +200,7 @@ mappings:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `control_id` | string | Yes | References `controls[].id` from the control library |
+| `control_id` | string | Yes | References `controls[].id` from the control library. Uppercase 2–4 characters. |
 | `control_name` | string | Yes | Human-readable name (duplicated for LLM readability) |
 | `mapped_artifacts` | list[object] | Yes | Artifacts mapped to this control. Empty list = GAP candidate. |
 | `mapped_artifacts[].artifact_id` | string | Yes | References `artifacts[].id` from the artifact registry |
@@ -250,14 +253,14 @@ framework: "Custom Demo Controls"
 
 | Control ID | Control Name | Confidence | Artifacts | Status |
 |------------|-------------|------------|-----------|--------|
-| AC-001 | Access Control | HIGH | 3 | ✅ Assessed |
-| CM-001 | Change Management | LOW | 1 | ⚠️ Weak Evidence |
-| DQ-001 | Data Quality | GAP | 0 | 🔴 No Evidence |
-| IH-001 | Incident Handling | GAP | 0 | 🔴 No Evidence |
+| AC | Access Control | HIGH | 3 | ✅ Assessed |
+| CM | Change Management | LOW | 1 | ⚠️ Weak Evidence |
+| DQ | Data Quality | GAP | 0 | 🔴 No Evidence |
+| IH | Incident Handling | GAP | 0 | 🔴 No Evidence |
 
 ---
 
-## AC-001 — Access Control
+## AC — Access Control
 
 **Confidence**: HIGH
 **Artifacts Cited**: 3
@@ -275,7 +278,7 @@ test_unauthorized_access_denied asserts 401 response].
 
 ---
 
-## DQ-001 — Data Quality
+## DQ — Data Quality
 
 **Confidence**: GAP
 **Artifacts Cited**: 0
@@ -335,10 +338,10 @@ Technical report for QA — verifies citation integrity and provides generation 
 
 | Control ID | Confidence | Direct Artifacts | Indirect Artifacts | Rubric Match |
 |------------|------------|-----------------|-------------------|--------------|
-| AC-001 | HIGH | 3 | 0 | ✅ ≥2 direct → HIGH |
-| CM-001 | LOW | 1 | 0 | ✅ 1 direct, 0 indirect → LOW |
-| DQ-001 | GAP | 0 | 0 | ✅ 0 artifacts → GAP |
-| IH-001 | GAP | 0 | 0 | ✅ 0 artifacts → GAP |
+| AC | HIGH | 3 | 0 | ✅ ≥2 direct → HIGH |
+| CM | LOW | 1 | 0 | ✅ 1 direct, 0 indirect → LOW |
+| DQ | GAP | 0 | 0 | ✅ 0 artifacts → GAP |
+| IH | GAP | 0 | 0 | ✅ 0 artifacts → GAP |
 
 ## Excluded Evidence
 
@@ -348,7 +351,7 @@ Technical report for QA — verifies citation integrity and provides generation 
 
 ## Warnings
 
-- CM-001: Only 1 of 4 expected evidence types covered (ci_cd_pipeline). Consider reviewing for missing artifacts.
+- CM: Only 1 of 4 expected evidence types covered (ci_cd_pipeline). Consider reviewing for missing artifacts.
 ```
 
 **Sections:**
