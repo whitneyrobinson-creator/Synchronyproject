@@ -108,6 +108,7 @@ F3 guarantees these exact file paths. F2 scripts can hardcode them.
 | Report Header format | Run timestamp, pipeline version, input file name, table name | QA report has no metadata header |
 | 6 sections in order | Coverage Statistics, Confidence Distribution, Fields Requiring Clarification, Merge Corrections, Warnings, Processing Notes | Sections are missing, out of order, or have wrong names |
 | Section names match exactly | F2's `generate_qa_report.py` uses these names as section headers in the output | Section headers in the output don't match the template |
+| Warnings section supports multiple warning types | Including extraction warnings (e.g., duplicate field names), LLM output validation issues, missing LLM output, and pipeline integrity warnings (e.g., confidence distribution sum mismatch). The section is conditional — only present if warnings exist. | New warning types are suppressed or the section structure doesn't accommodate them |
 
 ### What F2 Expects from the Sample Schema
 
@@ -156,6 +157,7 @@ The template defines the output format. Period.
 | Only 3 header placeholders exist | `{table_name}`, `{source_file}`, `{generation_date}` |
 | Table rows are NOT placeholders | F2 generates rows dynamically based on the data — the template only defines the column headers |
 | Evidence entries are NOT placeholders | F2 generates one entry per field — the template only defines the entry format |
+| F2 substitutes header placeholders using `.replace()` in a fixed order, before inserting any field data | This prevents accidental substitution if field values happen to contain placeholder-like text (e.g., a schema comment containing the literal string `{table_name}`) |
 
 ### Markdown Formatting Rules
 
@@ -167,6 +169,7 @@ The template defines the output format. Period.
 | No angle brackets in content (`<NA>`, `<null>`) | Disappears in rendered Markdown — browser treats it as HTML |
 | Use backticks for technical values | `null`, `true`, `false` |
 | Evidence items separated by semicolons, not line breaks | Line breaks inside a table cell or evidence entry break the formatting |
+| F2 escapes special Markdown characters in field names before writing to tables | Field names containing `\|`, `*`, `` ` ``, `\`, `[`, `]` are escaped in the Markdown output only. Intermediate JSON files retain the raw unescaped names. |
 
 ### Template Versioning
 
