@@ -32,11 +32,11 @@ F4 is a static asset package (6 files, zero runtime code). Research focused on f
 
 | Option | Example | Verdict |
 |---|---|---|
-| **A) Bracket-index** | `[AC-1]`, `[CM-3]` | ✅ Selected |
+| **A) Bracket-index** | `[AC-1]`, `[CM-3]` | ❌ Rejected — compact but requires a separate lookup table to resolve; auditor must cross-reference the Citation Index to find the actual file |
 | **B) Footnote-style** | `¹`, `²` with endnotes | ❌ Rejected — loses control context; auditor can't tell which control a citation belongs to at a glance |
-| **C) Inline path** | `(see auth/oauth_config.yaml:1-42)` | ❌ Rejected — clutters narrative text; paths may change |
+| **C) File-path citation** | `[auth/oauth_config.yaml — OAuth2 provider configuration]` | ✅ Selected |
 
-**Rationale**: Bracket-index embeds the control ID directly in the citation tag, making it self-documenting. An auditor reading `[AC-1]` immediately knows it's the first evidence citation for Access Control. The tag resolves to a file path + line range via the Citation Index in the validation report.
+**Rationale**: File-path citation syntax `[file_path — description]` embeds the evidence location directly in the narrative text. An auditor reading the narrative can immediately see *which file* supports a claim without consulting a separate index. The em-dash separator (` — `) cleanly divides the machine-readable path from the human-readable description. This format aligns with what F5 actually produces when generating narratives, eliminating a translation layer between LLM output and template format. Multi-file evidence simply uses separate citations — no sub-index syntax needed.
 
 ---
 
