@@ -1,16 +1,12 @@
-# Project Specification: Synchrony Documentation Automation Skillset
+# Feature Specification: Synchrony Documentation Automation Skillset
 
-**Project Repo**: `synchrony-doc-automation`
-
-**Created**: 2026-03-24
-
-**Updated**: 2026-04-12
-
-**Status**: Draft
-
-**Version**: 0.3
-
-**Owners**: Whitney Robinson (PM), Sheila Green, Molly Lowell
+**Feature Branch**: `synchrony-doc-automation`  
+**Created**: 2026-03-24  
+**Updated**: 2026-04-12  
+**Status**: Draft  
+**Version**: 0.3  
+**Owners**: Whitney Robinson (PM), Sheila Green, Molly Lowell  
+**Input**: User description: "Agent skillset that turns technical repository artifacts into audit-ready compliance documentation using Claude Agent Skills architecture (SKILL.md + scripts + assets)"
 
 **Change Log**:
 - v0.1 — Initial draft (Skill 1 focus)
@@ -157,7 +153,17 @@ synchrony-doc-automation/                        # Repository root
 
 ---
 
-## User Scenarios & Testing
+## User Scenarios & Testing *(mandatory)*
+
+<!--
+  IMPORTANT: User stories are PRIORITIZED as user journeys ordered by importance.
+  Each user story/journey is INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
+  you should still have a viable MVP (Minimum Viable Product) that delivers value.
+
+  P1 stories are required for the May 7th demo.
+  P2 stories are documented for future implementation.
+  P3/P4 stories are nice-to-haves.
+-->
 
 ### User Story 1 — Generate a Data Dictionary (Priority: P1)
 
@@ -172,9 +178,7 @@ A documentation team member provides a schema file in JSON format. The skillset 
 **Acceptance Scenarios**:
 
 1. **Given** a valid JSON schema file, **When** the user invokes the skill, **Then** the system returns a `data_dictionary.md` with all required fields: field_name, type, nullable, constraints/enums, description, source_path(s), evidence_refs, confidence, and last_verified.
-
 2. **Given** a valid schema file, **When** the data dictionary is generated, **Then** every field description includes a citation to the source schema artifact.
-
 3. **Given** valid inputs, **When** the skill completes, **Then** the system also produces a `qa_report.md` showing coverage stats and any [NEEDS CLARIFICATION] items.
 
 ---
@@ -190,13 +194,9 @@ A risk/compliance team member provides repository artifacts (artifact index, tes
 **Acceptance Scenarios**:
 
 1. **Given** valid inputs (artifact index, test catalog, control library), **When** the user invokes the skill, **Then** the system returns `rcsa_control_narratives.md` with a summary table and per-control narratives (3–5 sentences each) with inline citations using `[file_path — description]` format.
-
 2. **Given** valid inputs where one control has no supporting evidence, **When** the skill completes, **Then** the system explicitly flags that control as a "Gap" — the system MUST NOT imply compliance without proof.
-
 3. **Given** valid inputs, **When** the skill completes, **Then** every citation in the narratives resolves to a real artifact in the index.
-
 4. **Given** valid inputs, **When** the skill completes, **Then** the system also produces a `validation_report.md` showing citation resolution stats (total, valid, invalid, coverage %).
-
 5. **Given** valid inputs but the LLM is unavailable or returns a malformed response, **When** the skill runs, **Then** the system enters graceful degradation mode — producing `rcsa_control_narratives.md` populated with raw mapped evidence only (no LLM-generated narratives) and `validation_report.md` noting "LLM unavailable — raw evidence mode."
 
 ---
@@ -212,7 +212,6 @@ A documentation team member provides a codebase or pipeline definition. The skil
 **Acceptance Scenarios**:
 
 1. **Given** a valid codebase or pipeline definition, **When** the user invokes the skill, **Then** the system returns `pipeline_documentation.md` with step-by-step documentation covering inputs, outputs, transformations, and assumptions.
-
 2. **Given** valid inputs, **When** the documentation is generated, **Then** every documented step includes a citation to the corresponding source code.
 
 ---
@@ -228,7 +227,6 @@ A documentation team member provides test results (pass/fail, coverage stats). T
 **Acceptance Scenarios**:
 
 1. **Given** valid test results, **When** the user invokes the skill, **Then** the system returns `test_evidence_summary.md` with total tests, passed, failed, and coverage %.
-
 2. **Given** valid inputs, **When** the summary is generated, **Then** every test result links to the corresponding test file and code under test.
 
 ---
@@ -236,6 +234,10 @@ A documentation team member provides test results (pass/fail, coverage stats). T
 ### User Story 5 — DOCX Output Format (Priority: P3)
 
 A user generates any document and requests DOCX format. The system produces the same content in DOCX in addition to Markdown.
+
+**Why this priority**: A simple output format extension. Independently demonstrable in isolation, but represents the lowest complexity increment over Stories 1–4.
+
+**Independent Test**: Can be fully tested by generating a data dictionary and requesting DOCX output, then verifying the DOCX contains identical content to the Markdown version.
 
 **Acceptance Scenarios**:
 
@@ -247,6 +249,10 @@ A user generates any document and requests DOCX format. The system produces the 
 
 A documentation team member provides a glossary alongside a schema file. The system maps field names to consistent glossary labels in the data dictionary, ensuring organizational terminology is applied uniformly.
 
+**Why this priority**: Validates the optional input layer for data dictionary generation. Independently demonstrable without changing the core pipeline.
+
+**Independent Test**: Can be fully tested by providing a schema + glossary and verifying field names are mapped to their corresponding glossary labels in the output.
+
 **Acceptance Scenarios**:
 
 1. **Given** a schema file and a glossary, **When** the data dictionary is generated, **Then** field names are mapped to their corresponding glossary labels.
@@ -256,6 +262,10 @@ A documentation team member provides a glossary alongside a schema file. The sys
 ### User Story 7 — Change Detection (Priority: P4)
 
 A documentation team member provides a current schema and a prior version. The system produces a `changes.md` showing added, removed, and modified fields with concise notes.
+
+**Why this priority**: A nice-to-have diff feature. Independently demonstrable but not required for any other story.
+
+**Independent Test**: Can be fully tested by providing a current and prior schema and verifying `changes.md` accurately reflects the differences.
 
 **Acceptance Scenarios**:
 
@@ -309,7 +319,7 @@ A documentation team member provides a current schema and a prior version. The s
 | 5 | F5 — SKILL.md: RCSA | Define the LLM orchestration instructions that reference F4 assets and call F6 scripts |
 | 6 | F6 — Scripts: RCSA | Build the deterministic pipeline that validates inputs against F4 schemas, supports F5 orchestration, and produces final outputs (completes Skill 2) |
 
-**Skill 2 Build Order Rationale:** Unlike Skill 1 (which built SKILL.md first), Skill 2 builds Assets (F4) first because the RCSA skill's templates, sample data schemas, and citation format must be locked before F5 can reference them and F6 can validate against them. F4 is the single source of truth for output formatting and control definitions. F5 depends on F4's asset paths and template structures. F6 depends on F4's JSON schemas, template placeholders, and citation format.
+**Skill 2 Build Order Rationale:** Unlike Skill 1 (which built SKILL.md first), Skill 2 builds Assets (F4) first because the RCSA skill's templates, sample data schemas, and citation format must be locked before F5 can reference them and F6 can validate against them. F4 is the single source of truth for output formatting and control definitions.
 
 ### Cross-Feature Dependencies (Skill 2)
 
@@ -326,44 +336,42 @@ A documentation team member provides a current schema and a prior version. The s
 
 ---
 
-## Requirements
+## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-| FR | Description | Owner |
-|---|---|---|
-| **FR-001** | System MUST accept schema extracts in JSON format as input for data dictionary generation. YAML and DDL input support is documented as a future extension. | Script |
-| **FR-002** | System MUST accept artifact indexes (JSON) listing all discovered files, functions, and classes in a repository | Script |
-| **FR-003** | System MUST accept test catalogs (JSON) listing test names, file paths, and pass/fail status | Script |
-| **FR-004** | System MUST accept a control library (JSON) defining controls, objectives, and expected evidence types | Script |
-| **FR-005** | All input validation — file format, schema structure — MUST be handled by deterministic script logic before any LLM processing begins | Script |
-| **FR-006** | System MUST extract all fields from a schema (field name, type, nullable, constraints/enums) | Script |
-| **FR-007** | System MUST generate a plain-language description (≤25 words) for each field | LLM |
-| **FR-008** | System MUST include a citation (source path, evidence refs) for every field description | Script + LLM |
-| **FR-009** | System MUST assign a confidence score to each field description | Script + LLM |
-| **FR-010** | System MUST include a last_verified timestamp for each field | Script |
-| **FR-011** | If a glossary is provided, system MUST map field names to consistent glossary labels. Glossary mapping is a P3 feature — not included for demo day. | Script + LLM |
-| **FR-012** | System MUST produce `data_dictionary.md` as the primary output; structure and formatting enforced by a defined output template. CSV output format is documented as a future extension. | Script |
-| **FR-013** | System MUST produce `qa_report.md` showing coverage stats, confidence distribution breakdown (High, Medium, Low, N/A counts with percentages), and flagged items | Script |
-| **FR-014** | If a prior version is provided, system MAY produce `changes.md` showing added/removed/modified fields | Script |
-| **FR-015** | System MUST scan a repository and build an index of all artifacts (code files, tests, configs) | Script |
-| **FR-016** | System MUST map discovered evidence to defined controls (Access Control, Change Management, Data Quality, Incident Handling) | Script + LLM |
-| **FR-017** | System MUST generate auditor-friendly narratives (3–5 sentences per control) with inline citations using `[file_path — description]` format | LLM |
-| **FR-018** | System MUST explicitly flag a "Gap" statement when no evidence exists for a control — system MUST NOT imply compliance without proof. Gap flags must have zero false negatives. | LLM |
-| **FR-019** | System MUST validate that every citation resolves to a real artifact in the index; hallucinated citations are flagged with inline markers, not silently removed | Script |
-| **FR-020** | System MUST produce a summary table showing which controls have evidence vs. gaps, including confidence tiers (HIGH / MEDIUM / LOW) | Script |
-| **FR-021** | System MUST produce `rcsa_control_narratives.md` as the primary output; structure and formatting enforced by F4's output template with YAML front matter, summary table, and per-control sections | Script |
-| **FR-022** | System MUST produce `validation_report.md` showing citation resolution stats (total, valid, invalid, coverage %), citation index, evidence coverage per control, and flagged-for-human-review items | Script |
-| **FR-023** | System MUST accept a codebase or pipeline definition as input | Script |
-| **FR-024** | System MUST generate step-by-step documentation explaining inputs, outputs, transformations, and assumptions of a pipeline | LLM |
-| **FR-025** | System MUST include citations linking each documented step to the source code | Script + LLM |
-| **FR-026** | System MUST produce `pipeline_documentation.md` as the primary output; structure and formatting enforced by a defined output template | Script |
-| **FR-027** | System MUST accept test results (pass/fail, coverage stats) as input | Script |
-| **FR-028** | System MUST generate a summary of test execution results (total tests, passed, failed, coverage %) | Script + LLM |
-| **FR-029** | System MUST link each test result to the corresponding test file and code under test | Script |
-| **FR-030** | System MUST produce `test_evidence_summary.md` as the primary output; structure and formatting enforced by a defined output template | Script |
-| **FR-031** | All primary outputs MUST be in Markdown format | Script |
-| **FR-032** | System MAY support optional DOCX output format | Script |
+- **FR-001**: System MUST accept schema extracts in JSON format as input for data dictionary generation. YAML and DDL input support is documented as a future extension.
+- **FR-002**: System MUST accept artifact indexes (JSON) listing all discovered files, functions, and classes in a repository
+- **FR-003**: System MUST accept test catalogs (JSON) listing test names, file paths, and pass/fail status
+- **FR-004**: System MUST accept a control library (JSON) defining controls, objectives, and expected evidence types
+- **FR-005**: All input validation — file format, schema structure — MUST be handled by deterministic script logic before any LLM processing begins
+- **FR-006**: System MUST extract all fields from a schema (field name, type, nullable, constraints/enums)
+- **FR-007**: System MUST generate a plain-language description (≤25 words) for each field
+- **FR-008**: System MUST include a citation (source path, evidence refs) for every field description
+- **FR-009**: System MUST assign a confidence score to each field description
+- **FR-010**: System MUST include a last_verified timestamp for each field
+- **FR-011**: If a glossary is provided, system MUST map field names to consistent glossary labels. Glossary mapping is a P3 feature — not included for demo day.
+- **FR-012**: System MUST produce `data_dictionary.md` as the primary output; structure and formatting enforced by a defined output template. CSV output format is documented as a future extension.
+- **FR-013**: System MUST produce `qa_report.md` showing coverage stats, confidence distribution breakdown (High, Medium, Low, N/A counts with percentages), and flagged items
+- **FR-014**: If a prior version is provided, system MAY produce `changes.md` showing added/removed/modified fields
+- **FR-015**: System MUST scan a repository and build an index of all artifacts (code files, tests, configs)
+- **FR-016**: System MUST map discovered evidence to defined controls (Access Control, Change Management, Data Quality, Incident Handling)
+- **FR-017**: System MUST generate auditor-friendly narratives (3–5 sentences per control) with inline citations using `[file_path — description]` format
+- **FR-018**: System MUST explicitly flag a "Gap" statement when no evidence exists for a control — system MUST NOT imply compliance without proof. Gap flags must have zero false negatives.
+- **FR-019**: System MUST validate that every citation resolves to a real artifact in the index; hallucinated citations are flagged with inline markers, not silently removed
+- **FR-020**: System MUST produce a summary table showing which controls have evidence vs. gaps, including confidence tiers (HIGH / MEDIUM / LOW)
+- **FR-021**: System MUST produce `rcsa_control_narratives.md` as the primary output; structure and formatting enforced by F4's output template with YAML front matter, summary table, and per-control sections
+- **FR-022**: System MUST produce `validation_report.md` showing citation resolution stats (total, valid, invalid, coverage %), citation index, evidence coverage per control, and flagged-for-human-review items
+- **FR-023**: System MUST accept a codebase or pipeline definition as input
+- **FR-024**: System MUST generate step-by-step documentation explaining inputs, outputs, transformations, and assumptions of a pipeline
+- **FR-025**: System MUST include citations linking each documented step to the source code
+- **FR-026**: System MUST produce `pipeline_documentation.md` as the primary output; structure and formatting enforced by a defined output template
+- **FR-027**: System MUST accept test results (pass/fail, coverage stats) as input
+- **FR-028**: System MUST generate a summary of test execution results (total tests, passed, failed, coverage %)
+- **FR-029**: System MUST link each test result to the corresponding test file and code under test
+- **FR-030**: System MUST produce `test_evidence_summary.md` as the primary output; structure and formatting enforced by a defined output template
+- **FR-031**: All primary outputs MUST be in Markdown format
+- **FR-032**: System MAY support optional DOCX output format
 
 ### FR-to-Feature Traceability (Skill 2)
 
@@ -382,80 +390,66 @@ A documentation team member provides a current schema and a prior version. The s
 | FR-021 | ✅ | | ✅ | F4 provides template; F6 populates and writes it |
 | FR-022 | ✅ | | ✅ | F4 provides template; F6 populates and writes it |
 
----
+### Key Entities
 
-## Key Entities
-
-### P1 — Demo Day (Stories 1 & 2)
+#### P1 — Demo Day (Stories 1 & 2)
 
 - **Schema Extract** — A JSON file containing database/table field definitions (column names, types, constraints, nullability). Primary input for data dictionary generation. JSON format required for demo day; YAML and DDL support documented as future extension.
-
 - **Artifact Index** — A JSON file listing all discovered files, functions, and classes in a repository. Each artifact has `id`, `file_path` (relative), `file_type`, `description`, and optional `lines` field. Primary input for RCSA. Demo scale: 10–20 artifacts.
-
 - **Test Catalog** — A JSON file listing test names, file paths, file types, descriptions, and `controls_relevant` (self-documenting hint mapping tests to controls). Input for RCSA. Demo scale: 5–10 tests.
-
 - **Control Library** — A JSON file defining the four generic compliance controls (AC, CM, DQ, IH), their objectives, and expected evidence types (11 total). Each control includes `id`, `name`, `objective`, and `evidence_types` array. Input for RCSA.
-
 - **Data Dictionary** — Generated Markdown document containing field-level metadata: field_name, type, nullable, constraints/enums, description (≤25 words), source_path(s), evidence_refs, confidence, and last_verified. Primary output of Skill 1.
-
 - **Control Narrative** — Auditor-friendly 3–5 sentence paragraph per compliance control, with inline citations using `[file_path — description]` format. Explicitly flags gaps. Includes confidence tier (HIGH / MEDIUM / LOW). Primary output of Skill 2.
-
 - **QA Report** — Coverage statistics, confidence distribution breakdown, citation checks, and [NEEDS CLARIFICATION] items. Produced alongside the data dictionary.
-
 - **Validation Report** — Citation resolution statistics (total, valid, invalid, coverage %), citation index table, evidence coverage per control, and flagged-for-human-review section. Produced alongside RCSA control narratives.
-
 - **Citation Format** — Standardized syntax: `[file_path — description]` where `file_path` is relative and `description` is a brief human-readable label. Em dash ` — ` (space-emdash-space) separates path from description. Defined in F4's `citation_format.md`.
 
-### P2 — Documented for Future (Stories 3 & 4)
+#### P2 — Documented for Future (Stories 3 & 4)
 
 - **Pipeline Definition** — Codebase or pipeline configuration file describing data flow steps, transformations, inputs, and outputs.
 - **Test Results** — Test execution results including pass/fail status and coverage statistics.
 - **Pipeline Documentation** — Generated step-by-step Markdown document with citations to source code.
 - **Test Evidence Summary** — Generated Markdown summary of test execution results with links to test files.
 
-### P3 — Future (Story 5)
+#### P3 — Future (Story 5)
 
 - **Doc Pack** — Complete bundle of all generated documents from a single repository input.
 
 ---
 
-## Success Criteria
+## Success Criteria *(mandatory)*
 
-### Measurable Outcomes — Demo Day (P1)
+### Measurable Outcomes
 
-| SC | Outcome | Theme |
-|---|---|---|
-| **SC-001** | Time to generate a data dictionary is reduced from 60–120 min (manual) to ~5–10 min per repo | Effort Reduction |
-| **SC-002** | ≥ 95% of fields in the source schema are correctly extracted and present in the generated data dictionary | Output Quality |
-| **SC-003** | ≥ 90% of field descriptions include a citation to the source schema artifact | Traceability |
-| **SC-004** | ≥ 90% of template sections are populated in every generated data dictionary | Output Quality |
-| **SC-005** | ≥ 85% of true compliance gaps are correctly flagged in RCSA control narratives | Risk Detection |
-| **SC-006** | ≤ 5% of controls or tests referenced in RCSA narratives are invented (not in source artifacts) | Output Quality |
-| **SC-007** | ≥ 90% of citations in RCSA control narratives resolve to real artifacts | Traceability |
-| **SC-008** | ≥ 3 out of 4 compliance controls addressed (with evidence or explicit gap flag) in every RCSA run | Output Quality |
-| **SC-009** | ≥ 90% structural match when the same skill is run on the same inputs multiple times | Processing Reliability |
-| **SC-010** | AI-generated documentation scores ≥ 80% on evaluation rubric vs. human-written ground truth | Output Quality |
+#### Demo Day (P1)
 
-### Measurable Outcomes — Future (P2/P3, Not Measured for Demo Day)
+- **SC-001**: Time to generate a data dictionary is reduced from 60–120 min (manual) to ~5–10 min per repo
+- **SC-002**: ≥ 95% of fields in the source schema are correctly extracted and present in the generated data dictionary
+- **SC-003**: ≥ 90% of field descriptions include a citation to the source schema artifact
+- **SC-004**: ≥ 90% of template sections are populated in every generated data dictionary
+- **SC-005**: ≥ 85% of true compliance gaps are correctly flagged in RCSA control narratives
+- **SC-006**: ≤ 5% of controls or tests referenced in RCSA narratives are invented (not in source artifacts)
+- **SC-007**: ≥ 90% of citations in RCSA control narratives resolve to real artifacts
+- **SC-008**: ≥ 3 out of 4 compliance controls addressed (with evidence or explicit gap flag) in every RCSA run
+- **SC-009**: ≥ 90% structural match when the same skill is run on the same inputs multiple times
+- **SC-010**: AI-generated documentation scores ≥ 80% on evaluation rubric vs. human-written ground truth
 
-| SC | Outcome | Theme |
-|---|---|---|
-| **SC-011** | ≥ 90% of pipeline steps documented with inputs, outputs, and transformations | Output Quality |
-| **SC-012** | ≥ 90% of documented pipeline steps include a citation to source code | Traceability |
-| **SC-013** | ≥ 95% of pass/fail counts in test evidence summary match actual test results | Output Quality |
-| **SC-014** | ≥ 90% of test results linked to corresponding test file and code under test | Traceability |
-| **SC-015** | ≥ 90% of applicable document types generated when Doc Pack is invoked | Processing Reliability |
+#### Future (P2/P3, Not Measured for Demo Day)
 
-### Skill 2 — Performance Gates
+- **SC-011**: ≥ 90% of pipeline steps documented with inputs, outputs, and transformations
+- **SC-012**: ≥ 90% of documented pipeline steps include a citation to source code
+- **SC-013**: ≥ 95% of pass/fail counts in test evidence summary match actual test results
+- **SC-014**: ≥ 90% of test results linked to corresponding test file and code under test
+- **SC-015**: ≥ 90% of applicable document types generated when Doc Pack is invoked
 
-| Gate | Metric | Target | How Measured |
-|---|---|---|---|
-| Gap Detection | % of true gaps correctly flagged | ≥ 85% | Test with known-gap inputs |
-| Citation Accuracy | % of citations referencing real artifacts | ≥ 95% | F6 `validate_citations` output |
-| Control Coverage | Controls addressed per run | 4/4 (100%) | Count controls in output vs. input |
-| Structural Consistency | % match across repeated runs | ≥ 90% | Run same input 5x, compare structure |
-| Narrative Quality | Rubric score vs. human-written ground truth | ≥ 80% | Manual evaluation |
-| Pipeline Speed | End-to-end deterministic processing | < 60 seconds | Timed run at demo scale |
+#### Skill 2 — Performance Gates
+
+- **SC-016**: Gap detection — ≥ 85% of true gaps correctly flagged (tested with known-gap inputs)
+- **SC-017**: Citation accuracy — ≥ 95% of citations reference real artifacts (measured by F6 `validate_citations` output)
+- **SC-018**: Control coverage — 4/4 (100%) controls addressed per run
+- **SC-019**: Structural consistency — ≥ 90% match across repeated runs (same input 5x)
+- **SC-020**: Narrative quality — ≥ 80% rubric score vs. human-written ground truth
+- **SC-021**: Pipeline speed — < 60 seconds for deterministic processing at demo scale
 
 ---
 
