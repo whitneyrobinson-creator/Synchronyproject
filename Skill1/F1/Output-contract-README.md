@@ -90,6 +90,7 @@ F2 owns retry logic. F2 runs checks before accepting the output. Two categories:
 | Check | What Could Go Wrong |
 |---|---|
 | Is it valid JSON? | Claude added commentary or markdown outside the JSON |
+| Is the root element a JSON array? | Claude returned `null`, an object, or a primitive instead of a list |
 | Same number of objects as input fields? | Claude skipped fields in the middle of a long list |
 | Every object has all 5 fields? | Claude dropped a field from some objects |
 | `confidence` is `"High"`, `"Medium"`, or `"Low"`? | Claude used a different word |
@@ -108,7 +109,7 @@ F2 owns retry logic. F2 runs checks before accepting the output. Two categories:
 
 ### If Retries Fail
 
-If the output fails the reject-and-retry checks 3 times in a row, F2 stops and alerts the team. Most likely cause: the batch is too large for Claude's context window. Fix: reduce the number of fields per request.
+If the output fails the reject-and-retry checks 3 times in a row, F2 fills placeholder values for all fields and the pipeline continues. Both deliverables (`data_dictionary.md` and `qa_report.md`) are still produced. The QA report's Processing Notes section records the failure, and every field's `merge_status` is set to `"placeholder"`. See F2's `contracts.md` (Contract 4: Error Contract) for full placeholder definitions.
 
 ---
 
