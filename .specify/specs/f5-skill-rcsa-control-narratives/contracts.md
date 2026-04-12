@@ -2,6 +2,7 @@
 
 **Feature Branch**: `f5-rcsa-skill`
 **Created**: 2026-04-10
+**Updated**: 2026-04-12
 **Status**: Draft
 **Phase**: 1
 
@@ -13,6 +14,8 @@ This document defines the interface contracts between F5 (the SKILL.md orchestra
 
 - **F6 (Scripts)** — the deterministic Python scripts that F5 calls as tools
 - **F4 (Templates)** — the feature that will formalize F5's output structure into reusable templates
+
+**Control ID format:** Control IDs are uppercase 2–4 character strings (e.g., `AC`, `CM`, `DQ`, `IH`), enforced by F4's `control_library.schema.json` via regex `^[A-Z]{2,4}$`. F4's JSON files are the source of truth.
 
 **Direction of data flow:**
 
@@ -49,14 +52,15 @@ validation:
   status: "pass"  # or "fail"
   errors: []       # empty if pass
   # Example errors:
-  # - "control_library.yaml: missing required field 'objective' in control CM-001"
-  # - "control_library.yaml: duplicate control id 'AC-001'"
+  # - "control_library.yaml: missing required field 'objective' in control CM"
+  # - "control_library.yaml: duplicate control id 'AC'"
+  # - "control_library.yaml: control id 'access-control' does not match pattern ^[A-Z]{2,4}$"
 ```
 
 **Contract rules:**
 - If `status` is `"fail"`, the SKILL.md MUST stop and report the errors. It MUST NOT attempt to reason over invalid data.
 - If `status` is `"pass"`, the SKILL.md proceeds to Step 2.
-- F6 validates: required fields present, no duplicate IDs, evidence_types is non-empty for each control.
+- F6 validates: required fields present, no duplicate IDs, `id` matches regex `^[A-Z]{2,4}$`, evidence_types is non-empty for each control.
 
 ---
 
@@ -104,16 +108,35 @@ artifacts:
 
 ```yaml
 mappings:
-  - control_id: "AC-001"       # string, required, references control library
-    control_name: "Access Control"  # string, required
+  - control_id: "AC"                    # string, required, references control library
+    control_name: "Access Control"      # string, required
     mapped_artifacts:
-      - artifact_id: "ART-001"     # string, required, references artifact registry
-        artifact_type: "..."        # string, required
-        relevance: "direct"         # string, required, "direct" or "indirect"
+      - artifact_id: "ART-001"          # string, required, references artifact registry
+        artifact_type: "authentication_logic"
+        relevance: "direct"             # string, required, "direct" or "indirect"
+      - artifact_id: "ART-002"
+        artifact_type: "role_definitions"
+        relevance: "direct"
+
+  - control_id: "CM"
+    control_name: "Change Management"
+    mapped_artifacts:
+      - artifact_id: "ART-004"
+        artifact_type: "ci_cd_pipeline"
+        relevance: "direct"
+
+  - control_id: "DQ"
+    control_name: "Data Quality"
+    mapped_artifacts: []
+
+  - control_id: "IH"
+    control_name: "Incident Handling"
+    mapped_artifacts: []
 ```
 
 **Contract rules:**
 - Every control in the control library MUST appear in the mappings, even if `mapped_artifacts` is empty.
+- `control_id` MUST match a valid ID from the control library (uppercase 2–4 characters).
 - `relevance` values: `"direct"` = artifact_type exactly matches a control's evidence_type. `"indirect"` = partial or inferred match.
 - A single artifact MAY appear in multiple controls' `mapped_artifacts`.
 - F6 handles the mapping logic. F5 trusts the mapping but uses snippets as ground truth for reasoning.
@@ -180,6 +203,7 @@ citation_validation:
 | Scenario | F6 Responsibility | F5 Responsibility |
 |----------|-------------------|-------------------|
 | Invalid input files | Return `status: "fail"` with error list | Stop and report errors. Do not proceed. |
+| Invalid control ID format | Return `status: "fail"` with regex mismatch error | Stop and report errors. Do not proceed. |
 | No artifacts found | Return empty `artifacts: []` | Flag all controls as GAP |
 | No mappings for a control | Return empty `mapped_artifacts: []` | Flag that control as GAP |
 | Unresolved citations | Return `unresolved_list` with details | Fix or remove citations before final output |
@@ -210,6 +234,7 @@ F4 inherits:
 | Citation format | `[file_path — description]` as a standard pattern |
 | GAP flag format | `[GAP]` prefix as a standard pattern |
 | Confidence tiers | `HIGH`, `MEDIUM`, `LOW`, `GAP` as an enum |
+| Control ID format | Uppercase 2–4 characters as defined by F4's own schema |
 
 ### Output 2: `validation_report.md`
 
@@ -228,9 +253,11 @@ F4 inherits:
 
 | Rule | Description |
 |------|-------------|
+| **F4 owns control ID format** | F4's `control_library.schema.json` defines the regex `^[A-Z]{2,4}$`. F5 and F6 must comply. |
 | **F5 owns output structure** | F5 defines what the output looks like. F4 cannot change the structure — only parameterize it. |
 | **F4 owns template syntax** | F4 decides how to express templates (Jinja2, Mustache, etc.). F5 doesn't care about template syntax. |
 | **Changes flow F5 → F4** | If F5 changes its output structure, F4 must update its templates. Not the reverse. |
+| **ID format changes flow F4 → F5** | If F4 changes the control ID schema, F5 and F6 must update to match. |
 | **F4 must preserve all fields** | F4 templates must include every field F5 defines. F4 cannot drop fields for simplicity. |
 | **F4 can add presentation** | F4 can add styling, formatting, or layout improvements as long as all F5 data is preserved. |
 
@@ -255,6 +282,7 @@ Before F4 begins template work, F5 must provide:
 |----------|---------------|
 | F5 output doesn't match documented structure | F5 bug — fix the SKILL.md |
 | F4 template drops a field | F4 bug — fix the template |
+| Control ID doesn't match F4 schema | Input data bug — fix the control library |
 | New control framework needs different fields | F5 decides whether to add fields. F4 updates templates after. |
 | Output format changes (e.g., markdown → HTML) | Joint decision. F5 updates output instructions, F4 updates templates. |
 
