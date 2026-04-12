@@ -1,60 +1,96 @@
 # RCSA Control Narrative Skill — Master Reference
 
-**Project**: Synchrony Documentation Automation Skillset  
-**Skill**: RCSA Control Narrative Generation (Skill 2)  
-**Features**: F4 (Assets), F5 (SKILL.md), F6 (Scripts)  
-**Last Updated**: 2026-04-12  
-**Demo Day Deadline**: May 7, 2026
+> **Project**: Synchrony Documentation Automation Skillset  
+> **Skill**: RCSA Control Narrative Generation (Skill 2)  
+> **Features**: F4 (Assets), F5 (SKILL.md), F6 (Scripts)  
+> **Last Updated**: 2026-04-12  
+> **Demo Day Deadline**: May 7, 2026
 
 This document is the home base for the RCSA Control Narrative skill. It tells you what the skill does, how the three features work together, and what every file and data structure in the pipeline is. For deep technical detail on any specific feature, go to that feature's plan.
 
 ---
 
-## What This Skill Does
+# Table of Contents
 
-A user provides three JSON files — an artifact index listing repository files, a test catalog listing test files, and a control library defining compliance controls. The skill maps evidence to controls and produces two documents:
-
-1. **`rcsa_control_narratives.md`** — Citation-backed narratives for each compliance control (3–5 sentences each), with a summary table showing confidence tiers and gap flags, plus inline citations in `[file_path — description]` format.
-2. **`validation_report.md`** — A quality report showing citation resolution statistics, evidence coverage per control, missing evidence types, and items flagged for human review.
-
-The goal is to take a task that currently requires a compliance analyst to manually trace repository artifacts to controls — a process that takes hours and is error-prone — and reduce it to minutes, while producing output that is more consistent, more traceable, and more audit-ready than a human-written first draft. The system MUST never imply compliance without proof. If no evidence exists for a control, it flags a GAP — it does not generate a compliance narrative.
+- [What This Skill Does](#what-this-skill-does)
+- [The Three Features](#the-three-features)
+- [Repository Layout](#repository-layout)
+- [End-to-End Workflow](#end-to-end-workflow)
+  - [Step 1 — User Provides Three JSON Files](#step-1--user-provides-three-json-files)
+  - [Step 2 — Validate Input](#step-2--validate-input)
+  - [Step 3 — Build Artifact Registry](#step-3--build-artifact-registry)
+  - [Step 4 — Map Evidence to Controls](#step-4--map-evidence-to-controls)
+  - [Step 5 — LLM Generates Narratives](#step-5--llm-generates-narratives)
+  - [Step 6 — Validate Citations](#step-6--validate-citations)
+  - [Step 7 — Assemble Final Output](#step-7--assemble-final-output)
+- [Every File in the Pipeline](#every-file-in-the-pipeline)
+- [Key Rules That Govern the Whole Skill](#key-rules-that-govern-the-whole-skill)
+  - [Confidence Tiers](#confidence-tiers)
+  - [Citation Format](#citation-format)
+  - [Gap Handling](#gap-handling)
+  - [Placeholder Values — Degraded Mode](#placeholder-values--degraded-mode)
+  - [Template Authority](#template-authority)
+  - [Graceful Degradation](#graceful-degradation)
+  - [Error Signaling Between F5 and F6](#error-signaling-between-f5-and-f6)
+  - [Performance Budget](#performance-budget)
+  - [Sample Data Coverage Design](#sample-data-coverage-design)
+  - [Demo-Scale Constraints](#demo-scale-constraints)
+- [Cross-Feature Dependencies](#cross-feature-dependencies)
+- [Feature Ownership Summary](#feature-ownership-summary)
 
 ---
 
-## The Three Features
+# What This Skill Does
+
+A user provides three JSON files — an **artifact index** listing repository files, a **test catalog** listing test files, and a **control library** defining compliance controls. The skill maps evidence to controls and produces two documents:
+
+1. **`rcsa_control_narratives.md`** — Citation-backed narratives for each compliance control (3–5 sentences each), with a summary table showing confidence tiers and gap flags, plus inline citations in `[file_path — description]` format.
+
+2. **`validation_report.md`** — A quality report showing citation resolution statistics, evidence coverage per control, missing evidence types, and items flagged for human review.
+
+The goal is to take a task that currently requires a compliance analyst to manually trace repository artifacts to controls — a process that takes hours and is error-prone — and reduce it to minutes, while producing output that is more consistent, more traceable, and more audit-ready than a human-written first draft.
+
+**The system MUST never imply compliance without proof.** If no evidence exists for a control, it flags a GAP — it does not generate a compliance narrative.
+
+---
+
+# The Three Features
 
 The skill is built from three features. Each owns a distinct layer.
 
 | Feature | Name | What It Owns | Simple Version |
-|---------|------|-------------|----------------|
-| **F4** | Assets — RCSA | The static files — output templates (narratives + validation report), sample input data (artifact index, test catalog, control library), citation format specification, and control definitions | The blank forms + sample data |
-| **F5** | SKILL.md — RCSA | The LLM reasoning layer — orchestrates the 6-step workflow, generates auditor-friendly narratives with inline citations, flags gaps, assigns confidence tiers (HIGH / MEDIUM / LOW / GAP) | The LLM thinks |
-| **F6** | Scripts — RCSA | The deterministic pipeline — validates input, builds the artifact registry, maps evidence to controls, formats data for the LLM, validates citations post-generation, populates templates, and writes final output files | The code works |
+| ------- | ---- | ------------ | -------------- |
+| **F4** | Assets — RCSA | The static files — output templates, sample input data, citation format specification, and control definitions | The blank forms + sample data |
+| **F5** | SKILL.md — RCSA | The LLM reasoning layer — orchestrates the 6-step workflow, generates narratives with inline citations, flags gaps, assigns confidence tiers | The LLM thinks |
+| **F6** | Scripts — RCSA | The deterministic pipeline — validates input, builds the artifact registry, maps evidence, validates citations, populates templates, writes output | The code works |
 
-**The rule of thumb:** If it requires judgment, language, or orchestration decisions, F5 owns it. If it's deterministic logic (validation, mapping, citation checking, file writing), F6 owns it. If it's a static file the pipeline reads (templates, sample data, format specs), F4 owns it.
+**The rule of thumb:** If it requires judgment, language, or orchestration decisions, F5 owns it. If it's deterministic logic, F6 owns it. If it's a static file the pipeline reads, F4 owns it.
 
-**Build order rationale:** Unlike Skill 1 (which built SKILL.md first), Skill 2 builds Assets (F4) first because the RCSA skill's templates, sample data schemas, and citation format must be locked before F5 can reference them and F6 can validate against them. F4 is the single source of truth for output formatting and control definitions.
+## Build Order
+
+Unlike Skill 1 (which built SKILL.md first), Skill 2 builds Assets (F4) first because the RCSA skill's templates, sample data schemas, and citation format must be locked before F5 can reference them and F6 can validate against them.
 
 | Order | Feature | Rationale |
-|-------|---------|-----------|
-| 1 | F4 — Assets: RCSA | Establish the static foundation — templates, sample data, control library, and citation format that F5 and F6 depend on |
+| ----- | ------- | --------- |
+| 1 | F4 — Assets: RCSA | Establish the static foundation — templates, sample data, control library, and citation format |
 | 2 | F5 — SKILL.md: RCSA | Define the LLM orchestration instructions that reference F4 assets and call F6 scripts |
-| 3 | F6 — Scripts: RCSA | Build the deterministic pipeline that validates inputs against F4 schemas, supports F5 orchestration, and produces final outputs |
+| 3 | F6 — Scripts: RCSA | Build the deterministic pipeline that validates inputs, supports F5, and produces final outputs |
 
 ---
 
-## Repository Layout
+# Repository Layout
 
 All files for this skill live under `skills/rcsa/`. Nothing in `specs/` runs at runtime — it's planning documentation only.
 
-```
+```text
 synchrony-doc-automation/
 │
-├── .gitignore                                   # Excludes output/, __pycache__/, *.pyc, .env
+├── .gitignore
 │
 ├── skills/
-│   └── rcsa/                                    # Skill 2 — RCSA Control Narrative Generation
-│       ├── SKILL.md                             ← F5: LLM instruction file (agent skill)
+│   └── rcsa/
+│       ├── SKILL.md                             ← F5: LLM instruction file
+│       │
 │       ├── scripts/                             ← F6: 6 Python pipeline scripts
 │       │   ├── validate_input.py
 │       │   ├── build_registry.py
@@ -62,7 +98,8 @@ synchrony-doc-automation/
 │       │   ├── orchestrate_llm.py
 │       │   ├── validate_citations.py
 │       │   └── write_output.py
-│       ├── scripts/tests/                       ← Development only — NOT delivered to Synchrony
+│       │
+│       ├── scripts/tests/                       ← Dev only — NOT delivered to Synchrony
 │       │   ├── test_validate_input.py
 │       │   ├── test_build_registry.py
 │       │   ├── test_map_evidence.py
@@ -73,6 +110,7 @@ synchrony-doc-automation/
 │       │       ├── mock_llm_response_success.md
 │       │       ├── mock_llm_response_malformed.md
 │       │       └── mock_llm_response_empty.md
+│       │
 │       ├── assets/                              ← F4: static asset package
 │       │   ├── templates/
 │       │   │   ├── rcsa_control_narratives_template.md
@@ -82,6 +120,7 @@ synchrony-doc-automation/
 │       │   │   ├── sample_test_catalog.json
 │       │   │   └── sample_control_library.json
 │       │   └── citation_format.md
+│       │
 │       └── output/                              ← Created at runtime, NOT checked in
 │           ├── rcsa_control_narratives.md
 │           └── validation_report.md
@@ -93,6 +132,7 @@ synchrony-doc-automation/
 ```
 
 **Notes:**
+
 - `output/` is created at runtime by `write_output.py`. It is not checked into the repository.
 - RCSA assets are co-located inside `skills/rcsa/assets/` because F4, F5, and F6 form a single agent skill.
 - `scripts/tests/` contains mocked LLM responses for tier 2 testing. Not included in Synchrony handoff.
@@ -102,17 +142,19 @@ synchrony-doc-automation/
 
 ---
 
-## End-to-End Workflow
+# End-to-End Workflow
 
 Here is exactly what happens from the moment a user provides their input files to the moment they receive their deliverables.
 
-### Step 1 — User Provides Three JSON Files
+---
+
+## Step 1 — User Provides Three JSON Files
 
 The user provides three JSON files to Claude and asks it to generate RCSA control narratives.
 
-**What the user provides:**
+### 1a. Control Library
 
-**1. Control Library** (`sample_control_library.json`):
+`sample_control_library.json`
 
 ```json
 {
@@ -121,17 +163,17 @@ The user provides three JSON files to Claude and asks it to generate RCSA contro
     {
       "id": "AC",
       "name": "Access Control",
-      "objective": "Ensure system access is restricted to authorized users through authentication, authorization, and session management",
+      "objective": "Ensure system access is restricted to authorized users...",
       "evidence_types": [
-        { "id": "auth_config", "label": "Authentication Configuration", "description": "Configuration files defining authentication mechanisms such as OAuth, SSO, or MFA settings" },
-        { "id": "rbac_policy", "label": "RBAC Policy Definition", "description": "Role-based access control definitions specifying roles, permissions, and access levels" },
-        { "id": "session_management", "label": "Session Management Configuration", "description": "Configuration or code governing session lifecycle including timeout, renewal, and invalidation" }
+        { "id": "auth_config", "label": "Authentication Configuration", "description": "..." },
+        { "id": "rbac_policy", "label": "RBAC Policy Definition", "description": "..." },
+        { "id": "session_management", "label": "Session Management Configuration", "description": "..." }
       ]
     },
     {
       "id": "CM",
       "name": "Change Management",
-      "objective": "Ensure all changes to production systems follow approved processes with rollback capability",
+      "objective": "Ensure all changes to production systems follow approved processes...",
       "evidence_types": [
         { "id": "change_approval_record", "label": "Change Approval Record", "description": "..." },
         { "id": "deployment_config", "label": "Deployment Configuration", "description": "..." },
@@ -161,41 +203,43 @@ The user provides three JSON files to Claude and asks it to generate RCSA contro
 }
 ```
 
-**2. Artifact Index** (`sample_artifact_index.json`):
+### 1b. Artifact Index
+
+`sample_artifact_index.json` — 15 artifacts across `auth/`, `deploy/`, `data/`, `monitoring/`.
 
 ```json
 {
   "_meta": { "scale": "demo", "note": "Replace with production data post-handoff" },
   "artifacts": [
-    { "id": "ART-001", "file_path": "auth/oauth_config.yaml", "file_type": "yaml", "description": "OAuth2 provider configuration defining authentication flows, token lifetimes, and allowed redirect URIs" },
-    { "id": "ART-002", "file_path": "auth/mfa_settings.json", "file_type": "json", "description": "Multi-factor authentication settings including enforced methods and bypass rules" },
-    { "id": "ART-003", "file_path": "auth/rbac_roles.yaml", "file_type": "yaml", "description": "Role-based access control definitions mapping roles to permissions across application modules" }
+    { "id": "ART-001", "file_path": "auth/oauth_config.yaml", "file_type": "yaml", "description": "OAuth2 provider configuration..." },
+    { "id": "ART-002", "file_path": "auth/mfa_settings.json", "file_type": "json", "description": "Multi-factor authentication settings..." },
+    { "id": "ART-003", "file_path": "auth/rbac_roles.yaml", "file_type": "yaml", "description": "Role-based access control definitions..." }
   ]
 }
 ```
 
-> **Demo scale:** 15 artifacts total across `auth/`, `deploy/`, `data/`, `monitoring/` directories.
+### 1c. Test Catalog
 
-**3. Test Catalog** (`sample_test_catalog.json`):
+`sample_test_catalog.json` — 8 tests. Distribution: AC (3), CM (3), DQ (1), IH (1).
 
 ```json
 {
   "_meta": { "scale": "demo", "note": "Replace with production data post-handoff" },
   "tests": [
-    { "id": "TST-001", "file_path": "tests/auth/test_rbac_permissions.py", "file_type": "python", "description": "Verifies that RBAC role assignments enforce correct permission boundaries across application modules", "controls_relevant": ["AC"] }
+    { "id": "TST-001", "file_path": "tests/auth/test_rbac_permissions.py", "file_type": "python", "description": "Verifies RBAC role assignments...", "controls_relevant": ["AC"] }
   ]
 }
 ```
 
-> **Demo scale:** 8 tests total. Distribution: AC (3 tests), CM (3 tests), DQ (1 test), IH (1 test).
-
 ---
 
-### Step 2 — Validate Input (`validate_input.py`)
+## Step 2 — Validate Input
+
+**Script:** `validate_input.py`
 
 F6 checks that all three JSON files are valid before anything else runs. If anything is wrong, the pipeline stops here with a clear error message listing every problem.
 
-**What it checks:**
+### What It Checks
 
 - Do all 3 JSON files exist at expected paths?
 - Are they valid JSON?
@@ -208,7 +252,11 @@ F6 checks that all three JSON files are valid before anything else runs. If anyt
 - Does every test ID match `TST-NNN` pattern?
 - Does every value in `controls_relevant` reference a valid control ID?
 
-**Output:** `ValidationResult` (passed in-memory to F5)
+### Output — ValidationResult
+
+Passed in-memory to F5.
+
+**Success:**
 
 ```json
 {
@@ -221,7 +269,7 @@ F6 checks that all three JSON files are valid before anything else runs. If anyt
 }
 ```
 
-**Failure example:**
+**Failure:**
 
 ```json
 {
@@ -247,15 +295,19 @@ F6 checks that all three JSON files are valid before anything else runs. If anyt
 }
 ```
 
-**If `status` is `"fail"`, the pipeline stops. F5 reports the errors to the user. No downstream scripts execute.**
+> **If `status` is `"fail"`, the pipeline stops. F5 reports the errors to the user. No downstream scripts execute.**
 
 ---
 
-### Step 3 — Build Artifact Registry (`build_registry.py`)
+## Step 3 — Build Artifact Registry
+
+**Script:** `build_registry.py`
 
 F6 reads all three validated JSON files and builds a unified in-memory registry with O(1) lookups by ID and by file path. This registry is the single source of truth for citation validation later.
 
-**Output:** `ArtifactRegistry` (in-memory, not persisted to disk)
+### Output — ArtifactRegistry
+
+In-memory, not persisted to disk.
 
 ```json
 {
@@ -265,17 +317,16 @@ F6 reads all three validated JSON files and builds a unified in-memory registry 
         "id": "ART-001",
         "file_path": "auth/oauth_config.yaml",
         "file_type": "yaml",
-        "description": "OAuth2 provider configuration defining authentication flows, token lifetimes, and allowed redirect URIs",
+        "description": "OAuth2 provider configuration...",
         "source": "artifact_index"
-      },
-      "ART-002": { "..." }
+      }
     },
     "tests": {
       "TST-001": {
         "id": "TST-001",
         "file_path": "tests/auth/test_rbac_permissions.py",
         "file_type": "python",
-        "description": "Verifies that RBAC role assignments enforce correct permission boundaries across application modules",
+        "description": "Verifies RBAC role assignments...",
         "controls_relevant": ["AC"],
         "source": "test_catalog"
       }
@@ -314,28 +365,32 @@ F6 reads all three validated JSON files and builds a unified in-memory registry 
 }
 ```
 
-**Why this structure:**
+### Why This Structure
 
-- `artifacts` and `tests` are keyed by ID (not arrays) for fast lookup during evidence mapping
-- `file_path_index` is the critical structure for citation validation — when the LLM cites `[auth/oauth_config.yaml — ...]`, F6 looks up the file path here to confirm it exists
-- `source` field tracks whether an entry came from the artifact index or test catalog
+- **`artifacts`** and **`tests`** are keyed by ID (not arrays) for fast lookup during evidence mapping.
+- **`file_path_index`** is the critical structure for citation validation — when the LLM cites `[auth/oauth_config.yaml — ...]`, F6 looks up the file path here to confirm it exists.
+- **`source`** field tracks whether an entry came from the artifact index or test catalog.
 
-**If no artifacts are found:** F6 returns an empty registry. F5 flags all controls as GAP.
+If no artifacts are found, F6 returns an empty registry. F5 flags all controls as GAP.
 
 ---
 
-### Step 4 — Map Evidence to Controls (`map_evidence.py`)
+## Step 4 — Map Evidence to Controls
+
+**Script:** `map_evidence.py`
 
 F6 takes the artifact registry and control library and deterministically maps artifacts and tests to controls based on evidence type matching. Every control in the library appears in the output, even if it has no evidence.
 
-**Mapping logic:**
+### Mapping Logic
 
-1. For each control, collect its `evidence_types[].id` values (e.g., AC has `auth_config`, `rbac_policy`, `session_management`)
+1. For each control, collect its `evidence_types[].id` values
 2. For each artifact, determine which evidence type it matches based on its `description` and `file_path` context
 3. For each test, read `controls_relevant[]` to directly assign it to controls
 4. An artifact can map to multiple controls if it matches evidence types from more than one
 
-**Output:** `MappedEvidence` (in-memory, used three times: Steps 5, 6, and 7)
+### Output — MappedEvidence
+
+In-memory. Used three times: Steps 5, 6, and 7.
 
 ```json
 {
@@ -343,18 +398,18 @@ F6 takes the artifact registry and control library and deterministically maps ar
     {
       "control_id": "AC",
       "control_name": "Access Control",
-      "control_objective": "Ensure system access is restricted to authorized users through authentication, authorization, and session management",
+      "control_objective": "Ensure system access is restricted to authorized users...",
       "mapped_artifacts": [
-        { "id": "ART-001", "file_path": "auth/oauth_config.yaml", "file_type": "yaml", "description": "OAuth2 provider configuration...", "evidence_type_matched": "auth_config", "source": "artifact_index" },
-        { "id": "ART-002", "file_path": "auth/mfa_settings.json", "file_type": "json", "description": "Multi-factor authentication settings...", "evidence_type_matched": "auth_config", "source": "artifact_index" },
-        { "id": "ART-003", "file_path": "auth/rbac_roles.yaml", "file_type": "yaml", "description": "Role-based access control definitions...", "evidence_type_matched": "rbac_policy", "source": "artifact_index" },
-        { "id": "ART-004", "file_path": "auth/rbac_permissions_matrix.json", "file_type": "json", "description": "Permissions matrix...", "evidence_type_matched": "rbac_policy", "source": "artifact_index" },
-        { "id": "ART-005", "file_path": "auth/session_config.yaml", "file_type": "yaml", "description": "Session management configuration...", "evidence_type_matched": "session_management", "source": "artifact_index" }
+        { "id": "ART-001", "file_path": "auth/oauth_config.yaml", "evidence_type_matched": "auth_config" },
+        { "id": "ART-002", "file_path": "auth/mfa_settings.json", "evidence_type_matched": "auth_config" },
+        { "id": "ART-003", "file_path": "auth/rbac_roles.yaml", "evidence_type_matched": "rbac_policy" },
+        { "id": "ART-004", "file_path": "auth/rbac_permissions_matrix.json", "evidence_type_matched": "rbac_policy" },
+        { "id": "ART-005", "file_path": "auth/session_config.yaml", "evidence_type_matched": "session_management" }
       ],
       "mapped_tests": [
-        { "id": "TST-001", "file_path": "tests/auth/test_rbac_permissions.py", "description": "Verifies RBAC role assignments...", "source": "test_catalog" },
-        { "id": "TST-002", "file_path": "tests/auth/test_session_timeout.py", "description": "Validates session expiry...", "source": "test_catalog" },
-        { "id": "TST-003", "file_path": "tests/auth/test_oauth_flow.py", "description": "Tests OAuth2 authentication flow...", "source": "test_catalog" }
+        { "id": "TST-001", "file_path": "tests/auth/test_rbac_permissions.py" },
+        { "id": "TST-002", "file_path": "tests/auth/test_session_timeout.py" },
+        { "id": "TST-003", "file_path": "tests/auth/test_oauth_flow.py" }
       ],
       "evidence_type_coverage": {
         "auth_config": ["ART-001", "ART-002"],
@@ -368,20 +423,8 @@ F6 takes the artifact registry and control library and deterministically maps ar
     {
       "control_id": "CM",
       "control_name": "Change Management",
-      "control_objective": "Ensure all changes to production systems follow approved processes with rollback capability",
-      "mapped_artifacts": [
-        { "id": "ART-006", "file_path": "deploy/change_approval_workflow.yaml", "evidence_type_matched": "change_approval_record", "...": "..." },
-        { "id": "ART-007", "file_path": "deploy/pr_review_policy.md", "evidence_type_matched": "change_approval_record", "...": "..." },
-        { "id": "ART-008", "file_path": "deploy/ci_pipeline.yaml", "evidence_type_matched": "deployment_config", "...": "..." },
-        { "id": "ART-009", "file_path": "deploy/terraform_main.tf", "evidence_type_matched": "deployment_config", "...": "..." },
-        { "id": "ART-010", "file_path": "deploy/rollback_runbook.md", "evidence_type_matched": "rollback_procedure", "...": "..." },
-        { "id": "ART-011", "file_path": "deploy/rollback_script.sh", "evidence_type_matched": "rollback_procedure", "...": "..." }
-      ],
-      "mapped_tests": [
-        { "id": "TST-004", "file_path": "tests/deploy/test_approval_gate.py", "...": "..." },
-        { "id": "TST-005", "file_path": "tests/deploy/test_rollback.sh", "...": "..." },
-        { "id": "TST-006", "file_path": "tests/deploy/test_deployment_pipeline.py", "...": "..." }
-      ],
+      "mapped_artifacts": ["ART-006 through ART-011 (6 artifacts)"],
+      "mapped_tests": ["TST-004 through TST-006 (3 tests)"],
       "evidence_type_coverage": {
         "change_approval_record": ["ART-006", "ART-007"],
         "deployment_config": ["ART-008", "ART-009"],
@@ -394,13 +437,12 @@ F6 takes the artifact registry and control library and deterministically maps ar
     {
       "control_id": "DQ",
       "control_name": "Data Quality",
-      "control_objective": "Ensure data inputs are validated and transformations preserve integrity",
       "mapped_artifacts": [
-        { "id": "ART-012", "file_path": "data/input_schema.json", "evidence_type_matched": "input_validation_rule", "...": "..." },
-        { "id": "ART-013", "file_path": "data/validation_rules.yaml", "evidence_type_matched": "input_validation_rule", "...": "..." }
+        { "id": "ART-012", "file_path": "data/input_schema.json", "evidence_type_matched": "input_validation_rule" },
+        { "id": "ART-013", "file_path": "data/validation_rules.yaml", "evidence_type_matched": "input_validation_rule" }
       ],
       "mapped_tests": [
-        { "id": "TST-007", "file_path": "tests/data/test_input_validation.py", "...": "..." }
+        { "id": "TST-007", "file_path": "tests/data/test_input_validation.py" }
       ],
       "evidence_type_coverage": {
         "input_validation_rule": ["ART-012", "ART-013"],
@@ -413,13 +455,12 @@ F6 takes the artifact registry and control library and deterministically maps ar
     {
       "control_id": "IH",
       "control_name": "Incident Handling",
-      "control_objective": "Ensure security incidents are detected, responded to, and reviewed",
       "mapped_artifacts": [
-        { "id": "ART-014", "file_path": "monitoring/alerting_rules.yaml", "evidence_type_matched": "monitoring_config", "...": "..." },
-        { "id": "ART-015", "file_path": "monitoring/dashboard_config.json", "evidence_type_matched": "monitoring_config", "...": "..." }
+        { "id": "ART-014", "file_path": "monitoring/alerting_rules.yaml", "evidence_type_matched": "monitoring_config" },
+        { "id": "ART-015", "file_path": "monitoring/dashboard_config.json", "evidence_type_matched": "monitoring_config" }
       ],
       "mapped_tests": [
-        { "id": "TST-008", "file_path": "tests/monitoring/test_alert_triggers.py", "...": "..." }
+        { "id": "TST-008", "file_path": "tests/monitoring/test_alert_triggers.py" }
       ],
       "evidence_type_coverage": {
         "monitoring_config": ["ART-014", "ART-015"],
@@ -443,28 +484,37 @@ F6 takes the artifact registry and control library and deterministically maps ar
 }
 ```
 
-**Note on `gap_flag`:** `gap_flag` is `true` ONLY when BOTH `mapped_artifacts` AND `mapped_tests` are empty. DQ and IH have partial evidence (missing some evidence types) but are NOT flagged as gaps — they have evidence, just incomplete coverage. The confidence tier (assigned by the LLM in Step 5) reflects partial coverage.
+### Important Notes
 
-**Note on `evidence_type_coverage`:** This object shows exactly which evidence types have matching artifacts and which are empty arrays. This is what drives the "Evidence Types Missing" column in the validation report.
+- **`gap_flag`** is `true` ONLY when BOTH `mapped_artifacts` AND `mapped_tests` are empty. DQ and IH have partial evidence but are NOT flagged as gaps.
+- **`evidence_type_coverage`** shows exactly which evidence types have matching artifacts and which are empty arrays. This drives the "Evidence Types Missing" column in the validation report.
 
 ---
 
-### Step 5 — Format Evidence for LLM + LLM Generates Narratives (`orchestrate_llm.py` + F5 SKILL.md)
+## Step 5 — LLM Generates Narratives
+
+**Scripts:** `orchestrate_llm.py` + F5 `SKILL.md`
 
 This step is split into three parts:
 
-**Step 5a — Pre-LLM (`orchestrate_llm.py`):** F6 formats the mapped evidence into a structured prompt for the LLM. F6 never calls the LLM directly — it produces the prompt string and returns it to F5.
+### Step 5a — Pre-LLM (orchestrate_llm.py)
 
-**Step 5b — LLM Reasoning (F5 SKILL.md):** F5 takes the formatted prompt and sends it to the LLM (Claude Sonnet via Cursor agent runtime). The LLM reads the mapped evidence, artifact snippets, and control objectives, then generates:
+F6 formats the mapped evidence into a structured prompt for the LLM. F6 never calls the LLM directly — it produces the prompt string and returns it to F5.
+
+### Step 5b — LLM Reasoning (F5 SKILL.md)
+
+F5 takes the formatted prompt and sends it to the LLM. The LLM generates:
 
 - A 3–5 sentence narrative per control with inline citations
 - A confidence tier per control (HIGH / MEDIUM / LOW / GAP)
 - Explicit `[GAP]` flags for controls with no evidence
 - YAML front matter for the output document
 
-**Step 5c — Post-LLM (`orchestrate_llm.py`):** F6 parses the raw LLM Markdown response into a structured `LLMResponse` object.
+### Step 5c — Post-LLM (orchestrate_llm.py)
 
-**Expected LLM output format:**
+F6 parses the raw LLM Markdown response into a structured `LLMResponse` object.
+
+### Expected LLM Output Format
 
 ```markdown
 ## AC — Access Control
@@ -488,19 +538,17 @@ Session management is configured with timeout and invalidation policies
 [Narrative with partial evidence citations...]
 
 > ⚠️ GAP: data_transform_test — no matching evidence found
-
----
 ```
 
-**Parsing contract:**
+### Parsing Contract
 
 - Each control section starts with `## [CONTROL_ID] — [Control Name]`
 - Confidence tier appears on the line starting with `**Confidence**:`
 - Valid confidence values: `HIGH`, `MEDIUM`, `LOW`, `GAP`
 - Sections are separated by `---`
-- Citations within narrative text follow `[file_path — description]` format
+- Citations follow `[file_path — description]` format
 
-**Output:** `LLMResponse` (in-memory)
+### Output — LLMResponse
 
 ```json
 {
@@ -508,34 +556,18 @@ Session management is configured with timeout and invalidation policies
   "narratives": {
     "AC": {
       "confidence": "HIGH",
-      "narrative_text": "The repository demonstrates a structured approach to access control. Authentication is handled through OAuth2 configuration [auth/oauth_config.yaml — OAuth2 provider configuration] with multi-factor authentication enforced [auth/mfa_settings.json — MFA settings]. Role-based access is defined through explicit mappings [auth/rbac_roles.yaml — RBAC role definitions] supported by a granular permissions matrix [auth/rbac_permissions_matrix.json — permissions per role]. Session management is configured with timeout and invalidation policies [auth/session_config.yaml — session lifecycle configuration].",
+      "narrative_text": "The repository demonstrates a structured approach...",
       "artifacts_cited": ["ART-001", "ART-002", "ART-003", "ART-004", "ART-005"],
       "tests_cited": ["TST-001", "TST-002", "TST-003"],
       "evidence_types_covered": ["auth_config", "rbac_policy", "session_management"],
       "gap_flag": false
     },
-    "CM": {
-      "confidence": "HIGH",
-      "narrative_text": "...",
-      "artifacts_cited": ["ART-006", "ART-007", "ART-008", "ART-009", "ART-010", "ART-011"],
-      "tests_cited": ["TST-004", "TST-005", "TST-006"],
-      "evidence_types_covered": ["change_approval_record", "deployment_config", "rollback_procedure"],
-      "gap_flag": false
-    },
     "DQ": {
       "confidence": "MEDIUM",
-      "narrative_text": "Input validation is supported by a JSON Schema [data/input_schema.json — required fields and constraints] and business rule definitions [data/validation_rules.yaml — range checks and format requirements]. However, no data transformation tests were found.\n\n> ⚠️ GAP: data_transform_test — no matching evidence found",
+      "narrative_text": "Input validation is supported by...",
       "artifacts_cited": ["ART-012", "ART-013"],
       "tests_cited": ["TST-007"],
       "evidence_types_covered": ["input_validation_rule"],
-      "gap_flag": false
-    },
-    "IH": {
-      "confidence": "LOW",
-      "narrative_text": "Monitoring is partially addressed through alerting rules [monitoring/alerting_rules.yaml — error rate and latency thresholds] and a dashboard configuration [monitoring/dashboard_config.json — system health metrics]. However, no incident response plan or postmortem documentation was found.\n\n> ⚠️ GAP: incident_response_plan — no matching evidence found\n> ⚠️ GAP: postmortem_record — no matching evidence found",
-      "artifacts_cited": ["ART-014", "ART-015"],
-      "tests_cited": ["TST-008"],
-      "evidence_types_covered": ["monitoring_config"],
       "gap_flag": false
     }
   },
@@ -547,12 +579,13 @@ Session management is configured with timeout and invalidation policies
     "controls_low_confidence": 1,
     "controls_gap": 1,
     "framework": "Custom Demo Controls"
-  },
-  "raw_markdown": "---\ntitle: RCSA Control Narrative Assessment\n..."
+  }
 }
 ```
 
-**If the LLM fails or goes offline:** F6 still runs. `orchestrate_llm.py` returns a degraded `LLMResponse`:
+### If the LLM Fails
+
+F6 still runs. `orchestrate_llm.py` returns a degraded `LLMResponse`:
 
 ```json
 {
@@ -561,23 +594,17 @@ Session management is configured with timeout and invalidation policies
   "narratives": {},
   "yaml_front_matter": {
     "title": "RCSA Control Narrative Assessment — DEGRADED MODE",
-    "generated": "2026-05-07T14:30:00Z",
-    "controls_assessed": 4,
-    "controls_passing": 0,
-    "controls_low_confidence": 0,
-    "controls_gap": 0,
-    "framework": "Custom Demo Controls",
     "mode": "degraded"
   },
   "raw_markdown": null,
-  "mapped_evidence_passthrough": { "...": "full MappedEvidence object for manual review" }
+  "mapped_evidence_passthrough": { "...": "full MappedEvidence object" }
 }
 ```
 
-**If the LLM deviates:**
+### LLM Deviation Handling
 
 | Issue | What F6 Does |
-|-------|-------------|
+| ----- | ------------ |
 | Missing section for a control | That control is marked as degraded, others are unaffected |
 | Missing confidence line | Default to `"UNAVAILABLE"` |
 | Malformed citations | Caught by `validate_citations.py` in Step 6 |
@@ -585,11 +612,13 @@ Session management is configured with timeout and invalidation policies
 
 ---
 
-### Step 6 — Validate Citations (`validate_citations.py`)
+## Step 6 — Validate Citations
+
+**Script:** `validate_citations.py`
 
 F6 takes the LLM's draft narratives and checks every inline citation against the artifact registry. This is the anti-hallucination gate.
 
-**Citation parsing logic:**
+### Citation Parsing Logic
 
 1. Regex pattern: `\[([^\]]+?)\s—\s([^\]]+?)\]`
 2. Group 1 = `file_path` (the machine-readable part)
@@ -597,7 +626,7 @@ F6 takes the LLM's draft narratives and checks every inline citation against the
 4. Look up `file_path` in `registry.file_path_index`
 5. If found → resolved. If not found → unresolved (hallucinated).
 
-**Output:** `CitationValidationResult` (in-memory)
+### Output — CitationValidationResult
 
 ```json
 {
@@ -612,30 +641,23 @@ F6 takes the LLM's draft narratives and checks every inline citation against the
       "resolved_to": "ART-001",
       "resolved": true,
       "control_id": "AC"
-    },
-    {
-      "citation_text": "auth/mfa_settings.json — MFA settings",
-      "file_path_extracted": "auth/mfa_settings.json",
-      "resolved_to": "ART-002",
-      "resolved": true,
-      "control_id": "AC"
     }
   ],
   "unresolved_list": []
 }
 ```
 
-**If unresolved citations are found:** They are flagged with an inline marker in the output narrative: `⚠️ [ART-999] (unresolved)`. The pipeline completes — hallucinated citations are flagged, not silently removed. The validation report shows the count of hallucinated vs. valid citations.
-
-**F5's obligation:** If unresolved citations exist, F5 MUST fix them before producing final output — options: remove the citation, replace with a valid one, or flag the issue.
+> **If unresolved citations are found:** They are flagged with an inline marker: `⚠️ [ART-999] (unresolved)`. The pipeline completes — hallucinated citations are flagged, not silently removed.
 
 ---
 
-### Step 7 — Assemble Final Output (`write_output.py`)
+## Step 7 — Assemble Final Output
+
+**Script:** `write_output.py`
 
 F6 reads the `LLMResponse`, `CitationValidationResult`, and `MappedEvidence`, then populates F4's templates to produce the two final deliverables.
 
-**Output 1:** `output/rcsa_control_narratives.md`
+### Output 1 — `rcsa_control_narratives.md`
 
 ```markdown
 ---
@@ -667,24 +689,12 @@ overall_confidence: "MEDIUM"
 The repository demonstrates a structured approach to access control.
 Authentication is handled through OAuth2 configuration
 [auth/oauth_config.yaml — OAuth2 provider configuration] with multi-factor
-authentication enforced as an additional layer
-[auth/mfa_settings.json — MFA settings including enforced methods].
-Role-based access is defined through explicit role-to-permission mappings
+authentication enforced [auth/mfa_settings.json — MFA settings].
+Role-based access is defined through explicit mappings
 [auth/rbac_roles.yaml — RBAC role definitions] supported by a granular
-permissions matrix [auth/rbac_permissions_matrix.json — permissions per role
-and resource type]. Session management is configured with timeout and
-invalidation policies [auth/session_config.yaml — session lifecycle configuration].
-
----
-
-## CM — Change Management
-
-**Confidence**: HIGH
-**Artifacts Cited**: 6
-**Tests Cited**: 3
-**Evidence Types Covered**: change_approval_record, deployment_config, rollback_procedure
-
-[LLM-generated narrative with inline citations...]
+permissions matrix [auth/rbac_permissions_matrix.json — permissions per role].
+Session management is configured with timeout and invalidation policies
+[auth/session_config.yaml — session lifecycle configuration].
 
 ---
 
@@ -695,45 +705,24 @@ invalidation policies [auth/session_config.yaml — session lifecycle configurat
 **Tests Cited**: 1
 **Evidence Types Covered**: input_validation_rule
 
-Input validation is supported by a JSON Schema defining required fields and
-constraints [data/input_schema.json — required fields and constraints] and
-business rule definitions for range checks and format requirements
-[data/validation_rules.yaml — range checks and format requirements].
-However, no data transformation tests were found in the repository.
+Input validation is supported by a JSON Schema
+[data/input_schema.json — required fields and constraints] and business
+rule definitions [data/validation_rules.yaml — range checks and format
+requirements]. However, no data transformation tests were found.
 
 > ⚠️ GAP: data_transform_test — no matching evidence found
 
 ---
 
-## IH — Incident Handling
-
-**Confidence**: LOW
-**Artifacts Cited**: 2
-**Tests Cited**: 1
-**Evidence Types Covered**: monitoring_config
-
-Monitoring is partially addressed through alerting rules defining error rate
-and latency thresholds [monitoring/alerting_rules.yaml — error rate and
-latency thresholds] and a dashboard configuration displaying system health
-metrics [monitoring/dashboard_config.json — system health metrics].
-However, no incident response plan or postmortem documentation was found.
-
-> ⚠️ GAP: incident_response_plan — no matching evidence found
-> ⚠️ GAP: postmortem_record — no matching evidence found
-
----
-
 ## Confidence Legend
 
-- **HIGH** — ≥2 artifacts AND ≥1 test mapped, 0 hallucinated citations, all evidence types covered
-- **MEDIUM** — ≥1 artifact OR ≥1 test mapped, 0 hallucinated citations, some evidence types missing
+- **HIGH** — ≥2 artifacts AND ≥1 test mapped, 0 hallucinated citations
+- **MEDIUM** — ≥1 artifact OR ≥1 test mapped, 0 hallucinated citations
 - **LOW** — Any evidence exists but coverage is weak or hallucinated citations detected
 - **GAP** — No evidence mapped to this control
-
-*Controls with gap callouts require human attention before use in production.*
 ```
 
-**Output 2:** `output/validation_report.md`
+### Output 2 — `validation_report.md`
 
 ```markdown
 ---
@@ -747,25 +736,14 @@ resolution_rate: "100%"
 
 # Validation Report
 
-**Generated**: 2026-05-07T14:30:00Z
-**Controls Assessed**: 4
-
 ## Citation Resolution
 
 | Citation | Artifact ID | File Path | Resolved | Control |
 |----------|-------------|-----------|----------|---------|
 | auth/oauth_config.yaml — OAuth2 provider... | ART-001 | auth/oauth_config.yaml | ✅ Yes | AC |
 | auth/mfa_settings.json — MFA settings... | ART-002 | auth/mfa_settings.json | ✅ Yes | AC |
-| auth/rbac_roles.yaml — RBAC role definitions... | ART-003 | auth/rbac_roles.yaml | ✅ Yes | AC |
-| auth/rbac_permissions_matrix.json — permissions... | ART-004 | auth/rbac_permissions_matrix.json | ✅ Yes | AC |
-| auth/session_config.yaml — session lifecycle... | ART-005 | auth/session_config.yaml | ✅ Yes | AC |
-| deploy/change_approval_workflow.yaml — ... | ART-006 | deploy/change_approval_workflow.yaml | ✅ Yes | CM |
-| ... | ... | ... | ... | ... |
 
-**Total Citations**: 15
-**Resolved**: 15
-**Unresolved**: 0
-**Resolution Rate**: 100%
+**Total Citations**: 15 | **Resolved**: 15 | **Unresolved**: 0 | **Resolution Rate**: 100%
 
 ## Evidence Coverage
 
@@ -778,105 +756,100 @@ resolution_rate: "100%"
 
 ## Flagged for Human Review
 
-- DQ: Missing evidence type `data_transform_test` — no data transformation tests found in the repository
-- IH: Missing evidence type `incident_response_plan` — no incident response plan documentation found
-- IH: Missing evidence type `postmortem_record` — no postmortem documentation found
+- DQ: Missing evidence type `data_transform_test`
+- IH: Missing evidence type `incident_response_plan`
+- IH: Missing evidence type `postmortem_record`
 ```
 
 ---
 
-## Every File in the Pipeline
+# Every File in the Pipeline
 
-### Files the User Provides
+## Files the User Provides
 
 | File | What It Is | Required Keys |
-|------|-----------|---------------|
-| `sample_control_library.json` | Defines the 4 compliance controls and their 11 evidence types | `_meta`, `controls[]`, `controls[].id`, `controls[].name`, `controls[].objective`, `controls[].evidence_types[]` |
-| `sample_artifact_index.json` | Lists all repository artifacts (10–20 for demo) | `_meta`, `artifacts[]`, `artifacts[].id`, `artifacts[].file_path`, `artifacts[].file_type`, `artifacts[].description` |
-| `sample_test_catalog.json` | Lists all test files (5–10 for demo) | `_meta`, `tests[]`, `tests[].id`, `tests[].file_path`, `tests[].file_type`, `tests[].description`, `tests[].controls_relevant[]` |
+| ---- | ---------- | ------------- |
+| `sample_control_library.json` | 4 compliance controls, 11 evidence types | `_meta`, `controls[]`, `controls[].id`, `controls[].name`, `controls[].objective`, `controls[].evidence_types[]` |
+| `sample_artifact_index.json` | Repository artifacts (10–20 for demo) | `_meta`, `artifacts[]`, `artifacts[].id`, `artifacts[].file_path`, `artifacts[].file_type`, `artifacts[].description` |
+| `sample_test_catalog.json` | Test files (5–10 for demo) | `_meta`, `tests[]`, `tests[].id`, `tests[].file_path`, `tests[].file_type`, `tests[].description`, `tests[].controls_relevant[]` |
 
-### Internal Data Structures (In-Memory at Runtime)
+## Internal Data Structures (In-Memory at Runtime)
 
-Unlike Skill 1, Skill 2 does NOT persist intermediate files to disk. All data structures are passed in-memory between scripts via the agent runtime. This is acceptable for demo scale.
+Unlike Skill 1, Skill 2 does NOT persist intermediate files to disk. All data structures are passed in-memory between scripts via the agent runtime.
 
 | Data Structure | Created By | Read By | What It Contains |
-|---------------|-----------|---------|-----------------|
+| -------------- | ---------- | ------- | ---------------- |
 | `ValidationResult` | `validate_input.py` | F5 (SKILL.md) | Pass/fail status per file, with specific error messages |
 | `ArtifactRegistry` | `build_registry.py` | `map_evidence.py`, `validate_citations.py` | Unified lookup of all artifacts and tests, keyed by ID and by file_path |
 | `MappedEvidence` | `map_evidence.py` | `orchestrate_llm.py`, `write_output.py` | Per-control evidence mapping with coverage analysis and gap flags |
-| Formatted LLM Prompt | `orchestrate_llm.py` (pre-LLM) | F5 (SKILL.md) → LLM | Structured prompt string for the LLM — F5 must not modify it |
-| Raw LLM Response | F5 (SKILL.md) ← LLM | `orchestrate_llm.py` (post-LLM) | Markdown string with control sections, confidence tiers, and citations |
-| `LLMResponse` | `orchestrate_llm.py` (post-LLM) | `validate_citations.py`, `write_output.py` | Parsed narratives keyed by control ID, with confidence, citations, and gap flags |
-| `CitationValidationResult` | `validate_citations.py` | `write_output.py` | Per-citation resolution status, total/resolved/unresolved counts |
+| Formatted LLM Prompt | `orchestrate_llm.py` (pre-LLM) | F5 (SKILL.md) → LLM | Structured prompt string — F5 must not modify it |
+| Raw LLM Response | F5 (SKILL.md) ← LLM | `orchestrate_llm.py` (post-LLM) | Markdown with control sections, confidence tiers, and citations |
+| `LLMResponse` | `orchestrate_llm.py` (post-LLM) | `validate_citations.py`, `write_output.py` | Parsed narratives keyed by control ID |
+| `CitationValidationResult` | `validate_citations.py` | `write_output.py` | Per-citation resolution status and counts |
 
-### Final Deliverables (Created at Runtime by F6)
+## Final Deliverables (Created at Runtime by F6)
 
 | File | Created By | What It Is |
-|------|-----------|-----------|
-| `output/rcsa_control_narratives.md` | `write_output.py` | The control narratives — one section per control with citations, confidence tiers, and gap flags |
-| `output/validation_report.md` | `write_output.py` | The quality report — citation resolution stats, evidence coverage, and flagged items |
+| ---- | ---------- | ---------- |
+| `output/rcsa_control_narratives.md` | `write_output.py` | Control narratives with citations, confidence tiers, and gap flags |
+| `output/validation_report.md` | `write_output.py` | Citation resolution stats, evidence coverage, and flagged items |
 
-### Static Asset Files (F4 — Checked Into Repo)
+## Static Asset Files (F4 — Checked Into Repo)
 
 | File | What It Is | Who Uses It |
-|------|-----------|------------|
-| `assets/templates/rcsa_control_narratives_template.md` | Blueprint for the control narratives output (YAML front matter, summary table, per-control sections) | `write_output.py` reads it at runtime |
-| `assets/templates/validation_report_template.md` | Blueprint for the validation report output (citation index, evidence coverage, flagged items) | `write_output.py` reads it at runtime |
-| `assets/sample-data/sample_control_library.json` | 4-control, 11-evidence-type control library for testing | Used for end-to-end testing |
+| ---- | ---------- | ----------- |
+| `assets/templates/rcsa_control_narratives_template.md` | Blueprint for the control narratives output | `write_output.py` reads it at runtime |
+| `assets/templates/validation_report_template.md` | Blueprint for the validation report output | `write_output.py` reads it at runtime |
+| `assets/sample-data/sample_control_library.json` | 4-control, 11-evidence-type control library | Used for end-to-end testing |
 | `assets/sample-data/sample_artifact_index.json` | 15-artifact demo-scale artifact index | Used for end-to-end testing |
 | `assets/sample-data/sample_test_catalog.json` | 8-test demo-scale test catalog | Used for end-to-end testing |
-| `assets/citation_format.md` | Citation format specification: `[file_path — description]` syntax, resolution rules, examples | Referenced by F5 (LLM instructions) and F6 (citation regex) |
+| `assets/citation_format.md` | Citation format specification and resolution rules | Referenced by F5 and F6 |
 
 ---
 
-## Key Rules That Govern the Whole Skill
+# Key Rules That Govern the Whole Skill
 
-### Confidence Tiers
+## Confidence Tiers
 
 Confidence is always one of exactly four values (plus one fallback). These are the only allowed strings.
 
 | Value | Meaning | When It's Assigned |
-|-------|---------|-------------------|
-| `"HIGH"` | Strong evidence across all evidence types | ≥2 artifacts AND ≥1 test mapped, 0 hallucinated citations |
-| `"MEDIUM"` | Partial evidence — some types covered | ≥1 artifact OR ≥1 test mapped, 0 hallucinated citations |
-| `"LOW"` | Weak evidence — minimal coverage | Any evidence exists but hallucinated citations detected |
-| `"GAP"` | No evidence found | Zero artifacts AND zero tests mapped to this control |
-| `"UNAVAILABLE"` | LLM did not assign a tier | F6 default when tier is missing or LLM is unavailable |
+| ----- | ------- | ------------------ |
+| `HIGH` | Strong evidence across all evidence types | ≥2 artifacts AND ≥1 test mapped, 0 hallucinated citations |
+| `MEDIUM` | Partial evidence — some types covered | ≥1 artifact OR ≥1 test mapped, 0 hallucinated citations |
+| `LOW` | Weak evidence — minimal coverage | Any evidence exists but hallucinated citations detected |
+| `GAP` | No evidence found | Zero artifacts AND zero tests mapped to this control |
+| `UNAVAILABLE` | LLM did not assign a tier | F6 default when tier is missing or LLM is unavailable |
 
-**Rule:** A GAP flag means zero evidence. It is NOT the same as LOW confidence. LOW means some evidence exists but it's weak. GAP means nothing was found.
+> **Rule:** A GAP flag means zero evidence. It is NOT the same as LOW confidence. LOW means some evidence exists but it's weak. GAP means nothing was found.
 
-### Citation Format
+## Citation Format
 
 All citations in the narratives follow this exact format:
 
-**Syntax:** `[file_path — description]`
+- **Syntax:** `[file_path — description]`
+- **Separator:** ` — ` (space, em dash, space)
+- **Regex:** `\[([^\]]+?)\s—\s([^\]]+?)\]`
+- **Multi-file evidence:** Use separate citations per file — no sub-index syntax
+- **Example:** `[auth/oauth_config.yaml — OAuth2 provider configuration]`
 
-- `file_path` is the relative path to the evidence file (must match an entry in the artifact registry)
-- `description` is a brief human-readable label
-- The separator is an em dash with spaces on both sides: ` — ` (space, em dash, space)
-- Multi-file evidence uses separate citations per file — no sub-index syntax
+> **If F4 changes the citation format:** F5's SKILL.md must be updated, F6's `validate_citations.py` regex must be updated, and all three features must be re-aligned.
 
-**Regex for parsing:** `\[([^\]]+?)\s—\s([^\]]+?)\]`
+## Gap Handling
 
-**Example:** `[auth/oauth_config.yaml — OAuth2 provider configuration]`
+The system MUST never imply compliance without proof (Constitution Principle 1).
 
-**If F4 changes the citation format:** F5's SKILL.md must be updated (LLM instructions), F6's `validate_citations.py` regex must be updated, and all three features must be re-aligned before deployment.
-
-### Gap Handling
-
-The system MUST never imply compliance without proof. This is Constitution Principle 1.
-
-- If `mapped_artifacts` is empty AND `mapped_tests` is empty for a control → GAP flag
-- Gap flags must have zero false negatives — if no evidence exists, it MUST be flagged
-- Gap callouts use the format: `> ⚠️ GAP: {evidence_type} — no matching evidence found`
+- If `mapped_artifacts` is empty AND `mapped_tests` is empty → GAP flag
+- Gap flags must have **zero false negatives**
+- Gap callout format: `> ⚠️ GAP: {evidence_type} — no matching evidence found`
 - The LLM flags gaps only — it does NOT suggest remediation steps
 
-### Placeholder Values (Degraded Mode)
+## Placeholder Values — Degraded Mode
 
 When the LLM fails, F6 fills these values and the pipeline continues:
 
 | Field | Degraded Value |
-|-------|---------------|
+| ----- | -------------- |
 | `status` | `"degraded"` |
 | `narratives` | `{}` (empty object) |
 | `yaml_front_matter.mode` | `"degraded"` |
@@ -884,68 +857,68 @@ When the LLM fails, F6 fills these values and the pipeline continues:
 | `raw_markdown` | `null` |
 | `mapped_evidence_passthrough` | Full MappedEvidence object for manual review |
 
-In degraded mode, `write_output.py` produces `rcsa_control_narratives.md` populated with raw mapped evidence only (no LLM-generated narratives) and `validation_report.md` noting "LLM unavailable — raw evidence mode."
+In degraded mode, `write_output.py` produces narratives populated with raw mapped evidence only and validation report noting "LLM unavailable — raw evidence mode."
 
-### Template Authority
+## Template Authority
 
-F4's templates are the single source of truth for output format. F6 scripts read the templates and follow their structure — they never hardcode section names or column order. If you want to change the output format, change the template. All placeholders use `{{field_name}}` double curly brace syntax for F6 find-and-replace.
+F4's templates are the single source of truth for output format. F6 scripts read the templates and follow their structure — they never hardcode section names or column order. All placeholders use `{{field_name}}` double curly brace syntax.
 
-**A missing template is not graceful degradation — it's a setup error.** If `assets/templates/rcsa_control_narratives_template.md` or `assets/templates/validation_report_template.md` is missing, the pipeline stops with a clear error.
+> **A missing template is not graceful degradation — it's a setup error.** If a template file is missing, the pipeline stops with a clear error.
 
-### Graceful Degradation
+## Graceful Degradation
 
-If the LLM goes offline, F6 still runs. Pre-LLM scripts (`validate_input`, `build_registry`, `map_evidence`) function independently of LLM availability. The pipeline ALWAYS produces output files. The only exception is input validation failure (Step 2).
+If the LLM goes offline, F6 still runs. Pre-LLM scripts function independently of LLM availability. The pipeline ALWAYS produces output files. The only exception is input validation failure.
 
-| Scenario | Who Detects | What Happens | Pipeline Continues? |
-|----------|------------|-------------|-------------------|
-| Input validation fails | F6 (`validate_input.py`) | Returns `status: "fail"` with errors | ❌ No — F5 stops |
-| LLM times out | F5 | F5 passes empty/error to `orchestrate_llm.py` | ✅ Yes — degraded mode |
-| LLM returns empty | F5 | F5 passes empty string to `orchestrate_llm.py` | ✅ Yes — degraded mode |
-| LLM returns malformed output | F6 (`orchestrate_llm.py`) | Parses what it can, degrades the rest | ✅ Yes — partial degradation |
-| LLM hallucinates citations | F6 (`validate_citations.py`) | Flags unresolved citations in report | ✅ Yes — reported in output |
-| One control section missing from LLM | F6 (`orchestrate_llm.py`) | That control marked degraded, others normal | ✅ Yes — per-control degradation |
+| Scenario | Who Detects | What Happens | Continues? |
+| -------- | ----------- | ------------ | ---------- |
+| Input validation fails | F6 (`validate_input.py`) | Returns `status: "fail"` with errors | ❌ No |
+| LLM times out | F5 | F5 passes empty/error to `orchestrate_llm.py` | ✅ Degraded |
+| LLM returns empty | F5 | F5 passes empty string to `orchestrate_llm.py` | ✅ Degraded |
+| LLM returns malformed output | F6 (`orchestrate_llm.py`) | Parses what it can, degrades the rest | ✅ Partial |
+| LLM hallucinates citations | F6 (`validate_citations.py`) | Flags unresolved citations in report | ✅ Reported |
+| One control section missing | F6 (`orchestrate_llm.py`) | That control marked degraded, others normal | ✅ Per-control |
 
-### Error Signaling Between F5 and F6
+## Error Signaling Between F5 and F6
 
-**F6 → F5 (Script errors):**
+### F6 → F5 (Script errors)
 
 | Signal | Meaning | F5 Action |
-|--------|---------|-----------|
-| Exit code 0 + JSON with `status: "pass"` or `"success"` | Script succeeded | Proceed to next step |
-| Exit code 0 + JSON with `status: "fail"` | Validation failed (Step 2 only) | Stop pipeline, report errors |
-| Exit code 0 + JSON with `status: "degraded"` | LLM failed but pipeline can continue | Proceed in degraded mode |
+| ------ | ------- | --------- |
+| Exit code 0 + `status: "pass"` or `"success"` | Script succeeded | Proceed to next step |
+| Exit code 0 + `status: "fail"` | Validation failed (Step 2 only) | Stop pipeline, report errors |
+| Exit code 0 + `status: "degraded"` | LLM failed but pipeline can continue | Proceed in degraded mode |
 | Exit code 1 | Unexpected script error (bug) | Stop pipeline, report error |
 
-**F5 → F6 (LLM errors):**
+### F5 → F6 (LLM errors)
 
 | Signal | Meaning | F6 Action |
-|--------|---------|-----------|
+| ------ | ------- | --------- |
 | Valid Markdown string | LLM succeeded | Parse normally |
 | Empty string `""` | LLM returned nothing | Return degraded `LLMResponse` |
 | Error flag / null | LLM timed out or errored | Return degraded `LLMResponse` |
 
-### Performance Budget
+## Performance Budget
 
 | Owner | Component | Budget |
-|-------|-----------|--------|
-| F6 | All deterministic scripts (Steps 2–4a, 6–7) | < 30 seconds total |
+| ----- | --------- | ------ |
+| F6 | All deterministic scripts | < 30 seconds total |
 | F5 | LLM invocation (per control) | ≤ 30 seconds |
 | F5 | LLM invocation (all controls) | ≤ 120 seconds |
 | F6 | `orchestrate_llm.py` formatting + parsing | < 5 seconds |
 | **Total** | **Full pipeline** | **< 155 seconds worst case** |
 
-### Sample Data Coverage Design
+## Sample Data Coverage Design
 
 F4 sample data is intentionally designed with specific coverage patterns to test gap detection:
 
-| Control | Sample Evidence Provided | Intentional Gaps |
-|---------|------------------------|-----------------|
-| **AC** | All 3 evidence types present (5 artifacts, 3 tests) | None — full coverage |
-| **CM** | All 3 evidence types present (6 artifacts, 3 tests) | None — full coverage |
-| **DQ** | `input_validation_rule` present (2 artifacts, 1 test) | `data_transform_test` missing — gap flagged |
-| **IH** | `monitoring_config` present (2 artifacts, 1 test) | `incident_response_plan` and `postmortem_record` missing — gaps flagged |
+| Control | Evidence Provided | Intentional Gaps |
+| ------- | ----------------- | ---------------- |
+| **AC** | All 3 types (5 artifacts, 3 tests) | None — full coverage |
+| **CM** | All 3 types (6 artifacts, 3 tests) | None — full coverage |
+| **DQ** | `input_validation_rule` (2 artifacts, 1 test) | `data_transform_test` missing |
+| **IH** | `monitoring_config` (2 artifacts, 1 test) | `incident_response_plan` and `postmortem_record` missing |
 
-### Demo-Scale Constraints
+## Demo-Scale Constraints
 
 - 15 artifacts in sample artifact index
 - 8 tests in sample test catalog
@@ -958,25 +931,25 @@ F4 sample data is intentionally designed with specific coverage patterns to test
 
 ---
 
-## Cross-Feature Dependencies
+# Cross-Feature Dependencies
 
 | Upstream | Downstream | What's Shared | Contract |
-|----------|-----------|--------------|---------|
+| -------- | ---------- | ------------- | -------- |
 | F4 (Assets) | F5 (SKILL.md) | Asset file paths, YAML front matter fields, template structure, citation format syntax | Directory structure and templates locked in F4 plan |
-| F4 (Assets) | F6 (Scripts) | Control library JSON schema, artifact index + test catalog JSON schemas, template placeholder syntax, sample data for integration testing | JSON schemas and placeholder format locked in F4 plan |
+| F4 (Assets) | F6 (Scripts) | Control library JSON schema, artifact index + test catalog JSON schemas, template placeholder syntax, sample data | JSON schemas and placeholder format locked in F4 plan |
 | F5 (SKILL.md) | F6 (Scripts) | LLM response structure, script invocation sequence, confidence tier values | Cross-feature contract defined in F5 and F6 plans |
 
-### Cross-Feature Re-validation Gates
+## Cross-Feature Re-validation Gates
 
 1. **After F5 build** → Verify F5's LLM output instructions match F4's template fields and citation format. Reconcile mismatches.
 2. **After F6 plan approval** → Verify F6's input expectations match F4's sample data and JSON schemas. **Blocking gate** — F6 implementation cannot start until this passes.
 
 ---
 
-## Feature Ownership Summary
+# Feature Ownership Summary
 
 | What | Who Owns It | Where to Find More |
-|------|-----------|-------------------|
+| ---- | ----------- | ------------------ |
 | Output templates (narratives + validation report) | F4 | `specs/f4-rcsa-assets/plan.md` |
 | Sample input data (3 JSON files) | F4 | `specs/f4-rcsa-assets/plan.md` |
 | Citation format specification | F4 | `specs/f4-rcsa-assets/plan.md` |
