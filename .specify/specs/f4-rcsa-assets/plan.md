@@ -23,7 +23,9 @@ F4 delivers the static assets package for the RCSA Control Narrative Generation 
 **Storage**: File-based. Markdown and JSON files in `.cursor/skills/rcsa/assets/`.
 
 **Testing**: Two-tier validation:
+
 - **Tier 1 (during F4 dev)**: JSON parse checks, schema field verification, UTF-8 encoding checks, directory inventory validation. Runnable standalone.
+
 - **Tier 2 (after F6)**: F6's input validator and output assembler consume F4 assets end-to-end. Requires F6 to be built.
 
 **Target Platform**: Local development environment (Cursor IDE)
@@ -112,7 +114,7 @@ specs/f4-rcsa-assets/
 | **AS-05** | Evidence coverage matches design exactly | Both sample data files are cross-referenced against control library | Evidence types are mapped per control | AC: 3/3 matched, CM: 3/3 matched, DQ: 1/2 matched (gap: `data_transform_test`), IH: 1/3 matched (gaps: `incident_response_plan`, `postmortem_record`) |
 | **AS-06** | Narratives template is structurally valid | `rcsa_control_narratives_template.md` is inspected | Document structure is checked | Contains: YAML front matter with all defined fields, summary table with columns for Control/Confidence/Evidence Found/Gaps, four per-control sections each with gap callout area and citation placeholders |
 | **AS-07** | Validation report template is structurally valid | `validation_report_template.md` is inspected | Document structure is checked | Contains: YAML front matter with citation statistics fields, Citation Index table, Evidence Coverage table, Flagged for Human Review section |
-| **AS-08** | Citation format spec is complete | `citation_format.md` is inspected | Document content is checked | Defines bracket-index syntax `[XX-N]`, resolution rules mapping citation tags to file paths, and example citations for at least 2 controls |
+| **AS-08** | Citation format spec is complete | `citation_format.md` is inspected | Document content is checked | Defines file-path citation syntax `[file_path — description]`, resolution rules mapping citation tags to file paths, and example citations for at least 2 controls |
 | **AS-09** | No sensitive data in any file | All files in `assets/` are reviewed | Content is scanned for PII, secrets, absolute paths, real Synchrony identifiers | Zero instances found |
 | **AS-10** | All files are UTF-8 encoded | All files in `assets/` are checked | Encoding is verified | All files are valid UTF-8 (FR-012) |
 | **AS-11** | Asset directory contains exactly the expected files | `skills/rcsa/assets/` directory listing is checked | File inventory is compared to spec | Exactly 6 files in the defined structure — no extra files, no missing files |
@@ -128,7 +130,7 @@ specs/f4-rcsa-assets/
 | **R-02** | **Template placeholder syntax misaligns with F6's output assembler** | Medium | Medium | AS-12 enforces consistent placeholder syntax. `citation_format.md` is the single source of truth. F6's plan must reference F4's format spec — not define its own. |
 | **R-03** | **Control library evidence types too generic for deterministic matching** | Low | High | Evidence types designed with concrete artifact categories. Validate during F6 planning that each type maps to a distinguishable file pattern. Revise F4 if needed. |
 | **R-04** | **Sample data accidentally contains sensitive information** | Low | High | AS-09 requires explicit review. Pre-commit checklist: scan all JSON for patterns matching API keys, emails, SSNs, IP addresses. Peer review required before merge. |
-| **R-05** | **Citation format insufficient for complex evidence** | Low | Medium | Current format supports `file_path` + `lines` per citation. Multi-file evidence uses multiple citation tags (e.g., `[AC-1a]`, `[AC-1b]`). Document as extension rule in `citation_format.md`. |
+| **R-05** | **Citation format insufficient for complex evidence** | Low | Medium | Current format uses `[file_path — description]` which embeds the file path directly in the citation. Multi-file evidence uses separate citations per file — no sub-index syntax needed. |
 | **R-06** | **F5 references asset paths that change after lock** | Medium | Medium | F4's directory structure locked in Section 4. Any post-approval changes require updating F5's references. Cross-feature dependency note added to F5's plan. |
 | **R-07** | **YAML front matter fields misalign with F5's LLM instructions** — F5 tells the LLM to produce fields that don't match the template | Medium | Medium | After F5 is built, cross-reference F5's output instructions against F4's template YAML fields. Reconcile before F6 implementation. Include in the R-01 re-validation gate. |
 | **R-08** | **Demo-scale assumptions misunderstood by Synchrony** — client expects production-scale sample data | Low | Medium | Document demo-scale assumption explicitly in sample data files (top-level `"_meta"` field in each JSON: `"scale": "demo"`, `"note": "Replace with production data post-handoff"`). |
@@ -153,7 +155,7 @@ specs/f4-rcsa-assets/
 |---|---|---|
 | **F5 (SKILL.md)** | Asset file paths | Directory structure locked (Project Structure section) |
 | **F5 (SKILL.md)** | YAML front matter fields + template structure | Narratives and validation report templates locked |
-| **F5 (SKILL.md)** | Citation format syntax | `citation_format.md` — bracket-index `[XX-N]` locked |
+| **F5 (SKILL.md)** | Citation format syntax | `citation_format.md` — `[file_path — description]` format locked |
 | **F6 (Scripts)** | Control library JSON schema | `sample_control_library.json` schema locked |
 | **F6 (Scripts)** | Artifact index + test catalog JSON schemas | Both schemas locked |
 | **F6 (Scripts)** | Template placeholder syntax | Consistent format locked via AS-12 |
@@ -166,6 +168,7 @@ None. Zero runtime dependencies, no third-party packages, no external services. 
 ### Cross-Feature Re-validation Gates
 
 1. **After F5 build** → verify F5's LLM output instructions match F4's template fields (R-07)
+
 2. **After F6 plan approval** → verify F6's input expectations match F4's sample data (R-01). **Blocking gate** before F6 implementation begins.
 
 ---
@@ -182,7 +185,7 @@ None. Zero runtime dependencies, no third-party packages, no external services. 
 | M1.2 — Sample Artifact Index | `sample_artifact_index.json` — 10–20 artifacts, designed coverage | AS-01, AS-03 | M | M1.1 |
 | M1.3 — Sample Test Catalog | `sample_test_catalog.json` — 5–10 tests with `controls_relevant` | AS-01, AS-04 | S | M1.1 |
 | M1.4 — Evidence Coverage Verification | Cross-reference all three JSON files against coverage design | AS-05 | S | M1.1, M1.2, M1.3 |
-| M1.5 — Citation Format Spec | `citation_format.md` — bracket-index syntax, resolution rules, examples | AS-08 | S | M1.1 |
+| M1.5 — Citation Format Spec | `citation_format.md` — `[file_path — description]` syntax, resolution rules, examples | AS-08 | S | M1.1 |
 | M1.6 — Narratives Template | `rcsa_control_narratives_template.md` — YAML front matter, summary table, per-control sections | AS-06, AS-12 | M | M1.1, M1.5 |
 | M1.7 — Validation Report Template | `validation_report_template.md` — citation index, evidence coverage, flagged-for-review | AS-07, AS-12 | M | M1.1, M1.5 |
 | M1.8 — Security & Encoding Review | Scan all files for sensitive data, verify UTF-8, verify directory inventory | AS-09, AS-10, AS-11 | S | All above |
@@ -224,26 +227,34 @@ None. Zero runtime dependencies, no third-party packages, no external services. 
 
 ### Citation Format
 
-- Bracket-index syntax: `[XX-N]` where `XX` = control ID, `N` = sequential number
-- Each citation resolves to a `file_path` + optional `lines` range
-- Multi-file evidence uses sub-indices: `[AC-1a]`, `[AC-1b]`
+- File-path citation syntax: `[file_path — description]` where `file_path` is the relative path to the evidence file and `description` is a brief human-readable label
+- The em dash ` — ` (space-emdash-space) separates the path from the description
+- Each citation is self-resolving — the file path is embedded directly in the tag
+- Multi-file evidence uses separate citations per file (no sub-index syntax needed)
+- Example: `[auth/oauth_config.yaml — OAuth2 provider configuration]`
 
 ### Narratives Template Structure
 
 1. **YAML front matter**: title, generated timestamp, skill version, total controls, overall confidence
+
 2. **Summary table**: Control | Confidence Tier | Evidence Found | Gaps Identified
-3. **Per-control sections**: heading, narrative paragraph with inline `[XX-N]` citations, gap callout block (if applicable), evidence list
+
+3. **Per-control sections**: heading, narrative paragraph with inline `[file_path — description]` citations, gap callout block (if applicable), evidence list
 
 ### Validation Report Template Structure
 
 1. **YAML front matter**: title, generated timestamp, total/valid/invalid citations, resolution rate
+
 2. **Citation Index table**: Citation | File Path | Lines | Status (✅ Valid / ❌ Invalid)
+
 3. **Evidence Coverage table**: Control | Expected Types | Matched | Unmatched | Coverage %
+
 4. **Flagged for Human Review**: bullet list of specific gaps requiring follow-up
 
 ### Sample Data JSON Schemas
 
 **`sample_control_library.json`**:
+
 ```json
 {
   "_meta": { "scale": "demo", "note": "Replace with production data post-handoff" },
@@ -261,6 +272,7 @@ None. Zero runtime dependencies, no third-party packages, no external services. 
 ```
 
 **`sample_artifact_index.json`**:
+
 ```json
 {
   "_meta": { "scale": "demo", "note": "Replace with production data post-handoff" },
@@ -277,6 +289,7 @@ None. Zero runtime dependencies, no third-party packages, no external services. 
 ```
 
 **`sample_test_catalog.json`**:
+
 ```json
 {
   "_meta": { "scale": "demo", "note": "Replace with production data post-handoff" },
