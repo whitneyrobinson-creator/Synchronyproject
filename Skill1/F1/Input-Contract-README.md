@@ -36,7 +36,7 @@ A JSON object with the table name, source file, and a list of fields.
 |---|---|---|
 | `table_name` | **Yes** | Name of the table |
 | `source_file` | **Yes** | Name of the original data source file (e.g., `"sample_schema.json"`) |
-| `field_name` | **Yes** | Column name, exactly as it appears in the schema |
+| `field_name` | **Yes** | Column name. Leading/trailing whitespace is stripped by F2 before sending; otherwise sent as it appears in the schema. |
 | `type` | No | Data type (INTEGER, VARCHAR, DATE, etc.) |
 | `nullable` | No | Can this field be empty? true/false |
 | `constraints` | No | Database rules (PRIMARY KEY, FOREIGN KEY, CHECK, etc.). Empty list if none. |
@@ -50,7 +50,7 @@ A JSON object with the table name, source file, and a list of fields.
 
 1. **`table_name`, `source_file`, and `field_name` are always present.** Everything else can be missing or null.
 
-2. **`field_name` is sent exactly as it appears in the schema.** No cleaning, no reformatting.
+2. **`field_name` is sent as it appears in the schema, with leading/trailing whitespace stripped.** No other cleaning or reformatting is applied.
 
 3. **`source_file` is a non-empty string.** It identifies the original data source file and is used to build `source_path` for each field.
 
