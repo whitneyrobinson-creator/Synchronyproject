@@ -42,7 +42,7 @@ All files for this skill live here. Nothing in `specs/` runs at runtime — it's
 ```
 synchrony-doc-automation/
 │
-├── .gitignore                               # Excludes output/, __pycache__/, *.pyc
+├── .gitignore                               # Excludes output/, __pycache__/, *.pyc, .env
 │
 ├── skills/
 │   └── data-dictionary/
