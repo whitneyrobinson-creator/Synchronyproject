@@ -110,7 +110,7 @@ F2 doesn't crash. It handles every failure case:
 | Field name doesn't match | Name comparison (case-insensitive) | Tries case-insensitive match, then position fallback |
 | Field name casing is wrong | Case-insensitive match succeeds | Merges it, logs `name_case_mismatch` correction |
 | `confidence` is `"Low"` but `clarification_flag` is `false` | Logic check | Overrides flag to `true`, logs `clarification_flag_override` correction |
-| Description is over 25 words | Word count | Keeps it (soft limit), logs `description_over_limit` correction |
+| Description is over 25 words | Word count | Keeps it (soft limit — FR-007 targets ≤25 words but does not truncate, per Constitution Principle 1: Accuracy Over Speed), logs `description_over_limit` correction |
 | Fields returned in wrong order | Order comparison | Matches by name, logs `order_mismatch` correction |
 | Duplicate field names in output | Name matching finds two | Uses first match, ignores second, logs `duplicate_name_in_output` correction |
 
