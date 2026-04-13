@@ -20,8 +20,11 @@ A risk/compliance team member expects the skill to produce consistently formatte
 **Acceptance Scenarios**:
 
 1. **Given** the narrative output template exists, **When** a reviewer inspects it, **Then** it contains a summary table section, four control narrative sections (AC, CM, DQ, IH), inline citation format examples, and gap flag format.
+
 2. **Given** the validation report template exists, **When** a reviewer inspects it, **Then** it contains fields for total citations, valid citations, invalid citations, and coverage percentage.
+
 3. **Given** both templates are available, **When** they are compared to the output currently produced by F5 (SKILL.md) and F6 (Scripts), **Then** the templates match the existing output structure — no breaking changes.
+
 4. **Given** both templates are available, **When** the SKILL.md (F5) and Scripts (F6) are updated to reference them, **Then** the templates are accessible at the expected file paths within the assets directory.
 
 ---
@@ -37,9 +40,13 @@ A developer or team member needs sample input files to test the skill pipeline e
 **Acceptance Scenarios**:
 
 1. **Given** the sample artifact index exists, **When** it is parsed, **Then** it is valid JSON containing file entries with identifiers, file paths, and artifact types.
-2. **Given** the sample test catalog exists, **When** it is parsed, **Then** it is valid JSON containing test entries with test names, file paths, and pass/fail status.
+
+2. **Given** the sample test catalog exists, **When** it is parsed, **Then** it is valid JSON containing test entries with identifiers, file paths, file types, descriptions, and `controls_relevant` mappings.
+
 3. **Given** the sample control library exists, **When** it is parsed, **Then** it is valid JSON containing all four controls (AC, CM, DQ, IH) with objectives and expected evidence types.
+
 4. **Given** all three sample inputs are provided to the F6 pipeline, **When** the pipeline runs, **Then** at least one control has sufficient evidence (for narrative generation) and at least one control lacks evidence (for gap detection testing).
+
 5. **Given** the sample inputs, **When** they are validated by F6's input validation script, **Then** they pass all validation checks (existence, JSON validity, schema conformance) with 0 errors.
 
 ---
@@ -55,8 +62,11 @@ A risk/compliance team member needs a single authoritative definition of what ea
 **Acceptance Scenarios**:
 
 1. **Given** the control library exists, **When** it is inspected, **Then** it defines exactly four controls: Access Control, Change Management, Data Quality, and Incident Handling.
+
 2. **Given** each control in the library, **When** its definition is reviewed, **Then** it includes a control objective and a list of expected evidence types.
+
 3. **Given** the expected evidence types for each control, **When** they are compared to the sample artifact index, **Then** the evidence types are specific enough to support deterministic matching (not vague categories).
+
 4. **Given** the control library, **When** it is used by F6's evidence mapper, **Then** it produces the same mapping results as during F6 development — no regressions.
 
 ---
@@ -71,8 +81,10 @@ The assets package defines the exact citation format that F5 (SKILL.md) instruct
 
 **Acceptance Scenarios**:
 
-1. **Given** the citation format specification exists, **When** a reviewer inspects it, **Then** it defines the exact syntax for inline citations (e.g., `[artifact-id: file-path]`).
+1. **Given** the citation format specification exists, **When** a reviewer inspects it, **Then** it defines the exact syntax for inline citations using `[file_path — description]` format, where `file_path` is the relative path to the evidence file and `description` is a brief human-readable label.
+
 2. **Given** the citation format, **When** example citations are compared to the sample artifact index, **Then** the citation identifiers match real entries in the index.
+
 3. **Given** the citation format, **When** it is compared to the format F6's citation validator already checks against, **Then** they are identical — no discrepancies.
 
 ---
@@ -80,10 +92,15 @@ The assets package defines the exact citation format that F5 (SKILL.md) instruct
 ### Edge Cases
 
 - What happens when the control library is missing a control? The system should fail validation and report which control is missing rather than proceeding with incomplete data.
+
 - What happens when sample input files have malformed JSON? F6's input validation catches this before processing begins — F4 must ensure sample data passes F6 validation.
+
 - What happens when the control library defines evidence types that don't match any artifacts in the sample data? This is expected for gap detection testing — at least one control should intentionally lack matching evidence.
+
 - What happens when output templates are modified after F5 and F6 are built? Templates are versioned; changes require re-testing the full pipeline to ensure no regressions.
+
 - What happens when the citation format specification conflicts with what F6's citation validator expects? The citation format spec must match F6's existing validation logic — F4 formalizes, it does not redefine.
+
 - What happens when a new control needs to be added? The control library, templates, SKILL.md (F5), and scripts (F6) all need updating — document this as a known maintenance requirement.
 
 ---
@@ -98,11 +115,11 @@ The assets package defines the exact citation format that F5 (SKILL.md) instruct
 | **FR-002** | Assets MUST include a validation report template (`validation_report_template.md`) that formalizes the validation output structure from F6 (Scripts) |
 | **FR-003** | Assets MUST include a sample artifact index (`sample_artifact_index.json`) with realistic demo-scale data |
 | **FR-004** | Assets MUST include a sample test catalog (`sample_test_catalog.json`) with realistic demo-scale data |
-| **FR-005** | Assets MUST include a control library (`control_library.json`) defining all four compliance controls with objectives and expected evidence types |
+| **FR-005** | Assets MUST include a control library (`sample_control_library.json`) defining all four compliance controls with objectives and expected evidence types |
 | **FR-006** | The control library MUST define exactly four controls: Access Control, Change Management, Data Quality, and Incident Handling |
 | **FR-007** | All sample JSON files MUST be valid JSON, follow a consistent schema, and pass F6's input validation with 0 errors |
 | **FR-008** | Sample data MUST include scenarios that exercise both narrative generation (sufficient evidence) and gap detection (missing evidence) |
-| **FR-009** | Assets MUST include a citation format specification defining the exact syntax for inline citations, matching F6's citation validator |
+| **FR-009** | Assets MUST include a citation format specification defining the exact syntax for inline citations using `[file_path — description]` format, matching F6's citation validator |
 | **FR-010** | All asset files MUST be accessible at documented file paths within the `.cursor/skills/rcsa/assets/` directory |
 | **FR-011** | Output templates MUST match the output structure already produced by F5 and F6 — no breaking changes |
 | **FR-012** | All asset files MUST use UTF-8 encoding |
@@ -114,9 +131,9 @@ The assets package defines the exact citation format that F5 (SKILL.md) instruct
 | **Narrative Output Template** | Markdown template formalizing the structure of `rcsa_control_narratives.md` — includes summary table, per-control sections, citation format, and gap flag format. Based on the inline structure defined by F5. |
 | **Validation Report Template** | Markdown template formalizing the structure of `validation_report.md` — includes total citations, valid, invalid, and coverage percentage fields. Based on the output structure from F6. |
 | **Sample Artifact Index** | JSON file listing sample repository files, functions, and classes with identifiers and types. Must pass F6's input validation. |
-| **Sample Test Catalog** | JSON file listing sample test names, file paths, and pass/fail status. Must pass F6's input validation. |
-| **Control Library** | JSON file defining the four compliance controls, their objectives, and expected evidence types. Source of truth for evidence mapping in F6. |
-| **Citation Format Specification** | Document defining the exact syntax for inline citations used in narratives (F5) and validated by scripts (F6). |
+| **Sample Test Catalog** | JSON file listing sample test identifiers, file paths, file types, descriptions, and `controls_relevant` mappings. Must pass F6's input validation. |
+| **Control Library** | JSON file (`sample_control_library.json`) defining the four compliance controls, their objectives, and expected evidence types. Source of truth for evidence mapping in F6. |
+| **Citation Format Specification** | Document defining the exact syntax for inline citations used in narratives (F5) and validated by scripts (F6). Uses `[file_path — description]` format. |
 
 ---
 
@@ -138,10 +155,17 @@ The assets package defines the exact citation format that F5 (SKILL.md) instruct
 ## Assumptions
 
 - F5 (SKILL.md) and F6 (Scripts) are built before F4. F4 formalizes the output structures and sample data that were defined inline during F5 and F6 development.
+
 - The four compliance controls (AC, CM, DQ, IH) are fixed for the scope of this project. Adding new controls would require updating the control library, templates, SKILL.md, and scripts.
+
 - Sample data represents a small, demo-scale repository. It is not intended to represent enterprise-scale inputs.
+
 - Output templates formalize existing structure — they do not introduce new formatting or sections that F5 and F6 don't already support.
+
 - The control library's expected evidence types are specific enough for deterministic matching by F6 (Scripts). Vague categories (e.g., "security-related files") are not acceptable.
+
 - Asset files are static for the duration of the demo. They may be updated between development iterations but are not modified at runtime.
+
 - All asset files use UTF-8 encoding.
+
 - The citation format specification must match what F6's citation validator already checks — F4 documents the format, it does not redefine it.
