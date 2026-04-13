@@ -2,7 +2,7 @@
 
 **Feature:** F3 — Assets: Data Dictionary Generation
 **Project:** Synchrony Documentation Automation Skillset
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-12
 
 ---
 
@@ -83,7 +83,18 @@ A separate section below the main table. One entry per field, in the same order 
 
 - **Field name** as a subheading (e.g., `### LIMIT_BAL`)
 - **Source:** The `source_path` from F2 (format: `{source_file} → table: {table_name} → field: {field_name}`)
-- **Evidence:** The `evidence_refs` from F1 — the LLM's reasoning for the description and confidence score. Multiple evidence items separated by semicolons on one line (no line breaks inside the entry).
+- **Evidence:** The `evidence_refs` from F1 — the LLM's reasoning for the description and confidence score. Rendered as a numbered list, one evidence item per line. This eliminates delimiter ambiguity — no separator character is needed.
+
+Example:
+
+```
+### LIMIT_BAL
+**Source:** sample_schema.json → table: credit_card_clients → field: LIMIT_BAL
+**Evidence:**
+1. field_name: 'LIMIT_BAL' suggests credit limit or balance
+2. type: DECIMAL confirms numeric monetary value
+3. schema_comments: 'Credit limit in NT dollars' confirms meaning
+```
 
 ### Footer Section
 
@@ -272,6 +283,7 @@ A completed data dictionary for all 25 UCI Credit Card fields. This is the answe
 |-------|------|
 | `description` | ≤25 words, plain language, accurate to what the field represents |
 | `confidence` | Follows the FR-009 rubric: High (multiple strong signals), Medium (some signals), Low (few/no signals) |
+| `confidence` distribution coverage | The gold standard must contain at least 1 High, 1 Medium, and 1 Low confidence field. This ensures all three confidence paths are exercised during end-to-end testing. If the gold standard contains only High and Medium fields (no Low), the Low confidence path and clarification flag behavior are never validated. |
 | `evidence_refs` | Realistic reasoning explaining why the confidence score was assigned |
 | `source_path` | Format: `sample_schema.json → table: credit_card_clients → field: {field_name}` |
 | `last_verified` | Example ISO 8601 timestamp (e.g., `2026-05-07T14:30:00Z`) |
@@ -383,6 +395,7 @@ How to verify each F3 asset is correct:
 | All 25 fields present | Count the rows in the main table and entries in the evidence section |
 | Descriptions ≤25 words | Count words in each description |
 | Confidence scores follow rubric | High = multiple strong signals, Medium = some signals, Low = few/no signals |
+| At least 1 High, 1 Medium, and 1 Low confidence field present | Count the confidence values in the main table |
 | Low confidence fields have `clarification_flag` = true | Check that every Low field has `[NEEDS CLARIFICATION]` prepended |
 | Evidence section field order matches main table | Compare the order of entries in both sections |
 | QA report numbers match data dictionary counts | Cross-check every stat by counting in the data dictionary |
