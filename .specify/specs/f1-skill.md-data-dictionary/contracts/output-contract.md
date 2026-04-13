@@ -1,6 +1,6 @@
 # Output Contract: F1 (SKILL.md) → F2
 
-**What this is:** The promise F1 makes to F2. When the SKILL.md returns data, it will always look like this.
+**What this is:** The promise F1 makes to F2. When the SKILL.md returns data, it will always look like this
 
 **Full details:** See `data-model.md`, Section 3.
 
