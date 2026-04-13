@@ -67,6 +67,8 @@ The QA report template (`qa_report_template.md`) defines the following sections.
 - JSON format only for demo day — YAML and DDL (SQL-based schema format) are future extensions, not supported now
 - **Missing template = hard stop.** If F2's `assemble_output.py` or `generate_qa_report.py` can't find its template file, the script stops with a clear error message. This is a setup error, not a graceful degradation scenario. No fallback templates, no raw JSON dump. See contracts.md (Contract 2: F3 → F2) for the full agreement.
 - **All templates must exist at their defined paths before pipeline execution.** If a template is missing or renamed, F2's `assemble_output.py` (Step 5) will halt with an error. Template file names and paths are part of the contract between F2 and F3 — changes require updating both plans.
+- All F3 asset files must be saved as UTF-8 without BOM (byte order mark). This matches the project-level encoding requirement. Files saved as UTF-16 or with a BOM will cause JSON parse errors in F2 scripts.
+- F3 assets contain no secrets, API keys, or credentials. The project-level `.gitignore` excludes `.env` and `output/` directories. No additional security configuration is required for F3.
 
 **Scale/Scope**: 6 asset files covering 25 fields from the UCI Credit Card dataset. That's the full scope for demo day. After handoff, Synchrony creates their own versions of the sample schema and gold standard using their real data — but the templates stay the same.
 
@@ -79,6 +81,8 @@ The gold standard connects to two other files: the QA report gold standard (stat
 3. Check if the edited field is one of the 3 worked examples in SKILL.md → update SKILL.md if so
 4. Verify the numbers add up (`"High"` + `"Medium"` + `"Low"` + `"N/A"` = 25)
 5. Team review and sign-off
+
+Note: If F1's confidence rubric (defined in SKILL.md) is revised after the gold standard is created, the gold standard must be re-validated against the updated rubric to ensure confidence scores and evidence refs remain accurate.
 
 ---
 
