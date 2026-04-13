@@ -2,7 +2,7 @@
 
 **Feature:** F3 — Assets: Data Dictionary Generation
 **Project:** Synchrony Documentation Automation Skillset
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-12
 
 ---
 
@@ -158,6 +158,7 @@ The template defines the output format. Period.
 | Table rows are NOT placeholders | F2 generates rows dynamically based on the data — the template only defines the column headers |
 | Evidence entries are NOT placeholders | F2 generates one entry per field — the template only defines the entry format |
 | F2 substitutes header placeholders using `.replace()` in a fixed order, before inserting any field data | This prevents accidental substitution if field values happen to contain placeholder-like text (e.g., a schema comment containing the literal string `{table_name}`) |
+| Template static text must not contain placeholder literals | Template static text (footer, legend, notes) must not contain the literal strings `{table_name}`, `{source_file}`, or `{generation_date}` outside of the header placeholder positions. F2's `.replace()` is global and will substitute all occurrences. If the template needs to reference these placeholders as examples, use backtick-escaped versions or rephrase to avoid the literal string. |
 
 ### Markdown Formatting Rules
 
@@ -168,8 +169,8 @@ The template defines the output format. Period.
 | Always include the header separator row (`\|---\|---\|`) | Without it, the table renders as plain text |
 | No angle brackets in content (`<NA>`, `<null>`) | Disappears in rendered Markdown — browser treats it as HTML |
 | Use backticks for technical values | `null`, `true`, `false` |
-| Evidence items separated by semicolons, not line breaks | Line breaks inside a table cell or evidence entry break the formatting |
-| F2 escapes special Markdown characters in field names before writing to tables | Field names containing `\|`, `*`, `` ` ``, `\`, `[`, `]` are escaped in the Markdown output only. Intermediate JSON files retain the raw unescaped names. |
+| Evidence items rendered as a numbered list | Each evidence item is a separate numbered list entry under the field's Evidence subheading in the Evidence & Citations section. One evidence item per line. This eliminates delimiter ambiguity — no separator character is needed. |
+| F2 escapes special Markdown characters in all values rendered in Markdown table cells | Values containing `\|`, `*`, `` ` ``, `\`, `[`, `]` are escaped in the Markdown output only. Intermediate JSON files retain the raw unescaped names. This applies to field names, constraints, enums, schema_comments, and descriptions — not just field names. |
 
 ### Template Versioning
 
@@ -240,7 +241,7 @@ F2's input contract requires:
 | Key | F2 Expects | F3 Provides | Aligned? |
 |-----|-----------|-------------|----------|
 | `table_name` | Required string | Present | Yes |
-| `source_file` | Required string | Present | F2's current docs list only `table_name` and `fields` — needs update to add `source_file` |
+| `source_file` | Required string | Present | Yes |
 | `fields` | Required array | Present | Yes |
 | `fields[].field_name` | Required string | Present | Yes |
 | `fields[].type` | Optional, default `"UNKNOWN"` | Present (some fields intentionally missing) | Yes |
@@ -254,25 +255,25 @@ F2's input contract requires:
 | # | F3 Template Section Name | F2 Must Use This Name | Aligned? |
 |---|-------------------------|----------------------|----------|
 | — | Report Header | Report Header | Yes |
-| 1 | Coverage Statistics | Coverage Statistics | F2 currently says "Coverage Summary" — needs rename |
-| 2 | Confidence Distribution | Confidence Distribution | F2 currently missing this section — needs addition |
-| 3 | Fields Requiring Clarification | Fields Requiring Clarification | F2 currently says "Flagged Fields" — needs rename |
+| 1 | Coverage Statistics | Coverage Statistics | Yes |
+| 2 | Confidence Distribution | Confidence Distribution | Yes |
+| 3 | Fields Requiring Clarification | Fields Requiring Clarification | Yes |
 | 4 | Merge Corrections | Merge Corrections | Yes |
-| 5 | Warnings | Warnings | F2 currently says "Extraction Warnings" — needs rename |
-| 6 | Processing Notes | Processing Notes | F2 currently says "Run Summary" — needs rename |
+| 5 | Warnings | Warnings | Yes |
+| 6 | Processing Notes | Processing Notes | Yes |
 
-### Tracked F2 Updates Required
+### Tracked F2 Updates — Completed
 
-These mismatches were identified during F3 planning. F2 docs need these updates:
+All items below were resolved during the F2 planning phase. F2 documents now align with F3's canonical names and input contract. No further action needed.
 
-| F2 Document | Change |
-|-------------|--------|
-| Input contract | Add `source_file` as required top-level key |
-| Data model | Add `source_file` to Section 1 |
-| All QA report references | Rename sections to match F3's template names |
-| Quickstart | Add `source_file` to all input examples |
-| Edge cases | Add "template file missing → hard stop" |
-| Plan | Add task: "Add template file existence check to `assemble_output.py` and `generate_qa_report.py`" |
+| F2 Document | Change | Status |
+|-------------|--------|--------|
+| Input contract | Add `source_file` as required top-level key | ✅ Resolved |
+| Data model | Add `source_file` to Section 1 | ✅ Resolved |
+| All QA report references | Rename sections to match F3's template names | ✅ Resolved |
+| Quickstart | Add `source_file` to all input examples | ✅ Resolved |
+| Edge cases | Add "template file missing → hard stop" | ✅ Resolved |
+| Plan | Add task: "Add template file existence check to `assemble_output.py` and `generate_qa_report.py`" | ✅ Resolved |
 
 ---
 
