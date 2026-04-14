@@ -22,7 +22,7 @@
 
 > **Note:** All script output is **deterministic** — given the same input, scripts always produce the same output. The scripts handle everything that does NOT require an LLM: parsing, validating, extracting, citing, timestamping, assembling, and reporting.
 
-> **Pipeline Flow Reference:** Each user story notes its position in the pipeline so the reader understands when it executes relative to the LLM (F1).
+> **Pipeline Flow Reference:**
 >
 > ```
 > [Pre-LLM]  US-1 → US-2 → [F1/LLM generates descriptions] → [Post-LLM] US-3 → US-4 → US-5
@@ -35,7 +35,7 @@
 
 ### US-1: Parse and Validate a Schema File (P1)
 
-**Pipeline Position:** Pre-LLM — Step 1. This is the first thing that runs. Nothing else executes until validation passes.
+**Pipeline Position:** Pre-LLM — Step 1.
 
 **As a** documentation team member,
 **I want** the system to accept my JSON schema file, validate that it's well-formed and structurally correct, and tell me about all problems at once if something is wrong,
@@ -45,161 +45,148 @@
 
 **Script:** `validate_input.py`
 
-**What this tests:** The scripts' ability to accept JSON input, enforce structural requirements, and provide clear, actionable error messages.
-
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 1.1 | A valid JSON schema file with `table_name`, `source_file`, and a non-empty `fields` array where every field has a `field_name` | The user provides the file to the skill | `validate_input.py` passes with no errors. Writes `validated_schema.json`. Pipeline proceeds to US-2 (extraction). |
-| 1.2 | A JSON file missing `table_name` and containing two fields without `field_name` | The user provides the file to the skill | `validate_input.py` collects all three errors and returns them in a single error report. Pipeline does not proceed. |
-| 1.3 | A file that is not valid JSON (e.g., trailing commas, missing brackets) | The user provides the file to the skill | `validate_input.py` catches the parse error immediately and returns a specific error message. Pipeline does not proceed. |
+| 1.1 | A valid JSON schema file with `table_name`, `source_file`, and a non-empty `fields` array where every field has a non-empty `field_name` | The user provides the file to the skill | `validate_input.py` passes with no errors. Writes `validated_schema.json`. Pipeline proceeds. |
+| 1.2 | A JSON file missing `table_name` and containing two fields without `field_name` | The user provides the file to the skill | `validate_input.py` collects all errors and returns them in a single error report. Pipeline does not proceed. |
+| 1.3 | A file that is not valid JSON (e.g., trailing commas, missing brackets) | The user provides the file to the skill | `validate_input.py` catches the parse error and returns a user-friendly error with line/column number and hint. Pipeline does not proceed. |
 | 1.4 | A YAML or DDL file instead of JSON | The user provides the file to the skill | `validate_input.py` returns a clear error: "Only JSON schema files are supported in this version. Please convert to JSON." |
 | 1.5 | A valid JSON file where `fields` is an empty array | The user provides the file to the skill | `validate_input.py` returns error: "Schema contains no extractable fields." Pipeline does not proceed. |
+| 1.6 | A valid JSON file where a `field_name` is empty, whitespace-only, or exceeds 255 characters | The user provides the file to the skill | `validate_input.py` reports the specific field position and error. Pipeline does not proceed. |
 
 ---
 
 ### US-2: Extract Field Metadata from a Valid Schema (P1)
 
-**Pipeline Position:** Pre-LLM — Step 2. Runs after validation passes (US-1). Produces the metadata that gets sent to the LLM (F1) for description generation.
+**Pipeline Position:** Pre-LLM — Step 2.
 
 **As a** documentation team member,
-**I want** the system to extract all field-level metadata from my schema file — names, types, constraints, enums, comments — and construct a traceable source path for each field,
+**I want** the system to extract all field-level metadata from my schema file and construct a traceable source path for each field,
 **So that** the LLM has everything it needs to write accurate descriptions, and every field is traceable back to its origin.
 
 **Priority:** P1 — Required for demo day.
 
 **Script:** `extract_fields.py`
 
-**What this tests:** The scripts' ability to parse a JSON schema, extract all available metadata per field, construct source paths, and handle fields with missing optional data gracefully.
-
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 2.1 | A valid schema with 25 fields, all with complete metadata (type, nullable, constraints, enums, schema_comments) | `extract_fields.py` processes `validated_schema.json` | Output `extracted_fields.json` contains 25 objects, each with all 8 fields from the F2 → F1 contract. `source_path` is constructed as `{source_file} → table: {table_name} → field: {field_name}`. |
-| 2.2 | A valid schema where some fields are missing `type`, `enums`, or `schema_comments` | `extract_fields.py` processes `validated_schema.json` | Missing optional fields are set to `null` in the output. All fields are still included. Pipeline continues — the LLM handles ambiguity. |
-| 2.3 | A valid schema with duplicate `field_name` values | `extract_fields.py` processes `validated_schema.json` | Both entries are included in the output. Duplicates are logged to `extraction_warnings.json` for the QA report. |
-
-**What happens next:** `extracted_fields.json` is sent to F1 (SKILL.md). The LLM reads the metadata, generates descriptions, assigns confidence scores, and returns `llm_output.json`. US-3 picks up after the LLM responds.
+| 2.1 | A valid schema with 25 fields with complete metadata | `extract_fields.py` processes `validated_schema.json` | Output `extracted_fields.json` contains 25 objects, each with exactly 8 keys. `source_path` is constructed as `{source_file} → table: {table_name} → field: {field_name}`. |
+| 2.2 | A valid schema where some fields are missing `type`, `enums`, or `schema_comments` | `extract_fields.py` processes `validated_schema.json` | Missing optional fields are filled with deterministic defaults: `type` → `"UNKNOWN"`, `nullable` → `true`, `constraints` → `[]`, `enums` → `[]`, `schema_comments` → `null`. Pipeline continues. |
+| 2.3 | A valid schema with duplicate `field_name` values | `extract_fields.py` processes `validated_schema.json` | Both entries are included. Duplicates logged to `extraction_warnings.json`. |
+| 2.4 | A field with leading/trailing whitespace or newlines in `field_name` | `extract_fields.py` processes the field | Whitespace and newlines stripped. Correction logged as `field_name_whitespace_stripped` or `field_name_newline_stripped`. |
+| 2.5 | A field where `nullable` is provided as a string `"true"` or `"false"` | `extract_fields.py` processes the field | Coerced to boolean. Correction logged as `nullable_type_coerced`. |
 
 ---
 
 ### US-3: Validate and Merge LLM Output with Citations (P1)
 
-**Pipeline Position:** Post-LLM — Step 1. This runs **after the LLM (F1) has generated descriptions, confidence scores, and evidence references** and returned them as `llm_output.json`. This is where F2 quality-checks the LLM's work and merges it with the extracted metadata.
+**Pipeline Position:** Post-LLM — Step 1.
 
 **As a** documentation team member,
-**I want** the system to validate that the LLM returned output for every field I sent it, match each response back to the correct field, merge the LLM's descriptions and scores with my original metadata and source citations, and clearly flag any fields the LLM missed,
+**I want** the system to validate that the LLM returned output for every field, merge the LLM's descriptions and scores with my original metadata, and clearly flag any fields the LLM missed,
 **So that** I can trust the data dictionary is complete and every field is traceable.
 
 **Priority:** P1 — Required for demo day.
 
 **Script:** `attach_citations.py`
 
-**What this tests:** The scripts' ability to validate LLM output (count check, field_name matching), merge LLM-generated content with script-generated metadata, attach source citations, and handle mismatches gracefully.
-
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 3.1 | LLM returns a valid JSON array with exactly 25 objects, one per input field, all `field_name` values matching | `attach_citations.py` processes `extracted_fields.json` + `llm_output.json` | Count check passes. Name match passes. `merged_fields.json` contains 25 objects, each with all metadata fields + `description`, `confidence`, `evidence_refs`, `clarification_flag`, and `source_path`. |
-| 3.2 | LLM returns 23 objects instead of 25 (2 fields missing) | `attach_citations.py` processes the files | Count mismatch logged. The 23 matched fields are merged normally. The 2 unmatched fields get: `description` = "[LLM did not return a description]", `confidence` = "N/A", `evidence_refs` = "LLM output unavailable", `clarification_flag` = true. Mismatch logged for QA report. |
-| 3.3 | LLM returns a `field_name` that doesn't match any input field | `attach_citations.py` processes the files | Orphaned LLM output is logged and ignored. The unmatched input field gets placeholder values. Mismatch noted for QA report. |
-| 3.4 | LLM returns valid output but the schema has duplicate `field_name` values | `attach_citations.py` processes the files | Exact `field_name` match attempted first. For duplicates, falls back to array position matching. Both fields are merged. |
-| 3.5 | `source_path` from `extracted_fields.json` is attached to every merged field | `attach_citations.py` completes | Every object in `merged_fields.json` includes `source_path` from the extraction step (F2 owns this, not the LLM). |
+| 3.1 | LLM returns a valid JSON array with 25 objects, all `field_name` values matching | `attach_citations.py` runs | `merged_fields.json` contains 25 objects with 14 keys each: all metadata + `description`, `confidence`, `evidence_refs`, `clarification_flag`, `merge_status`, `corrections`. |
+| 3.2 | LLM returns 23 objects instead of 25 | `attach_citations.py` runs | Count mismatch logged. 23 matched fields merged normally. 2 unmatched fields get placeholder values. `merge_status` = `"placeholder"` for missing fields. |
+| 3.3 | LLM returns a `field_name` that doesn't match any input field | `attach_citations.py` runs | Orphaned LLM output ignored. Unmatched input field gets placeholder values. |
+| 3.4 | LLM output has structural failures (wrong confidence value, missing keys, non-boolean flag) | `attach_citations.py` runs | Per-field structural failures → only affected field gets placeholders. Root-level structural failure → all fields get placeholders. All failures logged to Warnings. |
+| 3.5 | LLM returns `confidence` = `"Low"` but `clarification_flag` = `false` | `attach_citations.py` runs | Flag overridden to `true`. Correction logged as `clarification_flag_override`. |
+| 3.6 | LLM output fails validation — F2 retries | `attach_citations.py` runs up to 3 total attempts | If all 3 attempts fail, all fields get placeholders. Both deliverables still produced. |
 
 ---
 
 ### US-4: Timestamp and Assemble the Data Dictionary (P1)
 
-**Pipeline Position:** Post-LLM — Step 2. Runs **after LLM output has been validated and merged** (US-3). This step adds timestamps and produces the final deliverable.
+**Pipeline Position:** Post-LLM — Steps 2 and 3.
 
 **As a** documentation team member,
-**I want** the system to add a `last_verified` timestamp to every field and then assemble all the data — metadata, descriptions, citations, scores, flags, and timestamps — into a single, formatted data dictionary document,
+**I want** the system to add a `last_verified` timestamp to every field and assemble all data into a formatted data dictionary,
 **So that** I receive one audit-ready deliverable I can review and share.
 
 **Priority:** P1 — Required for demo day.
 
 **Scripts:** `add_timestamps.py` → `assemble_output.py`
 
-**What this tests:** The scripts' ability to apply consistent timestamps and populate the F3 template into a well-formatted, complete Markdown document.
-
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 4.1 | `merged_fields.json` contains 25 fully merged field objects | `add_timestamps.py` runs | `timestamped_fields.json` contains all 25 objects, each with a new `last_verified` field in ISO 8601 format. All fields share the same timestamp (one per run). |
-| 4.2 | `timestamped_fields.json` is ready and `data_dictionary_template.md` exists in F3 assets | `assemble_output.py` runs | `data_dictionary.md` is produced. Every field includes: field_name, type (or "Not specified"), nullable (or "Not specified"), constraints (or "None"), enums (or "None"), description, source_path, evidence_refs, confidence, clarification_flag (prepends `[NEEDS CLARIFICATION]` if true), and last_verified. |
-| 4.3 | A field has `confidence` = "N/A" and `clarification_flag` = true (LLM missed it) | `assemble_output.py` runs | The field appears in the data dictionary with `[NEEDS CLARIFICATION]` prepended to the description placeholder. No data is silently dropped. |
-| 4.4 | The skill is run twice on the same input | Both runs complete | Outputs are identical except for the `last_verified` timestamp, which reflects the time of each run. |
+| 4.1 | `merged_fields.json` contains 25 fully merged field objects | `add_timestamps.py` runs | `timestamped_fields.json` contains all 25 objects with 15 keys each. All fields share one ISO 8601 UTC timestamp per run. |
+| 4.2 | `timestamped_fields.json` is ready and `data_dictionary_template.md` exists in `assets/` | `assemble_output.py` runs | `data_dictionary.md` is produced. Header placeholders replaced using `.replace()` in fixed order. Special characters in table cells escaped via `sanitize_for_markdown()`. Enum values separated by semicolons. Evidence refs rendered as numbered list. |
+| 4.3 | A field has `clarification_flag` = `true` | `assemble_output.py` runs | `[NEEDS CLARIFICATION]` prepended to the field's description in the output. |
+| 4.4 | Template file is missing | `assemble_output.py` runs | Script stops immediately with clear error message. This is a setup error, not graceful degradation. |
+| 4.5 | Template file contains Git merge conflict markers | `assemble_output.py` runs | Script stops with error before any parsing or substitution. |
+| 4.6 | The skill is run twice on the same input | Both runs complete | Outputs identical except `last_verified` timestamp. |
 
 ---
 
 ### US-5: Generate the QA Report (P1)
 
-**Pipeline Position:** Post-LLM — Step 3. This is the **final step** in the pipeline. Runs after the data dictionary has been assembled (US-4). Summarizes the entire run.
+**Pipeline Position:** Post-LLM — Step 4 (final).
 
 **As a** documentation team member,
-**I want** the system to produce a QA report alongside the data dictionary showing coverage stats, flagged items, and any warnings from the pipeline run,
+**I want** the system to produce a QA report showing coverage stats, confidence distribution, flagged items, and any warnings,
 **So that** I know exactly what needs my attention and can verify completeness at a glance.
 
 **Priority:** P1 — Required for demo day.
 
 **Script:** `generate_qa_report.py`
 
-**What this tests:** The scripts' ability to count, categorize, and report on the completeness and quality of the generated data dictionary.
-
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 5.1 | A complete data dictionary with 25 fields, all with descriptions and citations | `generate_qa_report.py` runs | `qa_report.md` shows: total fields = 25, fields with descriptions = 25, fields with citations = 25, fields with confidence scores = 25, fields flagged [NEEDS CLARIFICATION] = count of Low confidence fields, completeness = 100%. |
-| 5.2 | A partial data dictionary where 2 fields have placeholder descriptions (LLM missed them) | `generate_qa_report.py` runs | `qa_report.md` shows: fields with descriptions = 23, completeness = 92%. The 2 missing fields are listed by name in a "Fields Missing LLM Output" section. |
-| 5.3 | A partial data dictionary produced during graceful degradation (LLM was offline — no descriptions at all) | `generate_qa_report.py` runs | `qa_report.md` shows: fields with descriptions = 0, completeness = 0%, and a note: "LLM output was unavailable. Descriptions, confidence scores, and clarification flags are missing." |
-| 5.4 | `extraction_warnings.json` exists with duplicate field name warnings | `generate_qa_report.py` runs | `qa_report.md` includes a "Warnings" section listing the duplicate field names from the extraction step. |
-| 5.5 | LLM output had count or name mismatches (logged by attach_citations.py) | `generate_qa_report.py` runs | `qa_report.md` includes a "LLM Output Validation" section noting the specific mismatches detected. |
+| 5.1 | A complete data dictionary with 25 fields, all with descriptions | `generate_qa_report.py` runs | `qa_report.md` shows all 6 sections with correct counts. Confidence distribution sums to 25. Completeness = 100%. |
+| 5.2 | A partial data dictionary where 2 fields have placeholders | `generate_qa_report.py` runs | Completeness = 92%. 2 missing fields listed. `merge_status` = `"placeholder"` used to calculate coverage. |
+| 5.3 | LLM was offline — all fields are placeholders | `generate_qa_report.py` runs | Completeness = 0%. Processing Notes shows `Partial` status. Clear note that LLM content is missing. |
+| 5.4 | `extraction_warnings.json` exists | `generate_qa_report.py` runs | Warnings section includes duplicate field name entries. |
+| 5.5 | Confidence distribution sum does not equal total field count | `generate_qa_report.py` runs | Pipeline integrity warning logged. Pipeline continues — no crash. |
+| 5.6 | Template file is missing or contains conflict markers | `generate_qa_report.py` runs | Script stops with clear error before any processing. |
 
 ---
 
 ### US-6: Graceful Degradation — LLM Offline or Failed (P1)
 
-**Pipeline Position:** Fallback path. This activates when the LLM (F1) is **offline, unreachable, or returns malformed/unparseable output**. The pre-LLM scripts (US-1, US-2) run normally. The post-LLM scripts (US-3, US-4, US-5) run in degraded mode.
+**Pipeline Position:** Fallback path.
 
 **As a** documentation team member,
 **I want** the system to still produce a useful partial data dictionary and QA report even when the LLM is unavailable,
-**So that** I have all the raw metadata organized and ready — and I can manually write descriptions or re-run the skill later when the LLM is back online.
+**So that** I have all the raw metadata organized and ready.
 
-**Priority:** P1 — Required for demo day. This is a Constitution principle (Graceful Degradation).
+**Priority:** P1 — Required for demo day. Constitution Principle 2 (Graceful Degradation).
 
-**Scripts:** All scripts still run. `attach_citations.py` detects the failure and sets all LLM fields to placeholders.
-
-**What this tests:** The system's ability to degrade gracefully without crashing, losing data, or producing corrupted output.
+**Scripts:** All scripts still run. `attach_citations.py` detects the failure and fills placeholders.
 
 **Acceptance Scenarios:**
 
 | # | Given | When | Then |
 |---|---|---|---|
-| 6.1 | LLM is offline — `llm_output.json` does not exist | `attach_citations.py` runs | `llm_available` set to false. All fields get: `description` = "[LLM did not return a description]", `confidence` = "N/A", `evidence_refs` = "LLM output unavailable", `clarification_flag` = true. Pipeline continues. |
-| 6.2 | LLM returns malformed JSON (unparseable) | `attach_citations.py` attempts to parse `llm_output.json` | Parse error caught. Treated identically to LLM offline (scenario 6.1). Pipeline continues. |
-| 6.3 | Graceful degradation is active | `add_timestamps.py` and `assemble_output.py` run | `data_dictionary.md` is produced with all metadata (field_name, type, nullable, constraints, enums, source_path, last_verified) but placeholder descriptions and no confidence scores. Every field shows `[NEEDS CLARIFICATION]`. |
-| 6.4 | Graceful degradation is active | `generate_qa_report.py` runs | `qa_report.md` shows completeness = 0% and includes a clear note: "LLM output was unavailable. All descriptions, confidence scores, and clarification flags are placeholders. Re-run the skill when the LLM is available, or manually add descriptions." |
+| 6.1 | `llm_output.json` does not exist | `attach_citations.py` runs | All fields get placeholder values. `merge_status` = `"placeholder"`. Pipeline continues. |
+| 6.2 | `llm_output.json` exists but is not parseable JSON | `attach_citations.py` runs | Parse error caught. Treated identically to 6.1. |
+| 6.3 | Graceful degradation is active | `add_timestamps.py` and `assemble_output.py` run | `data_dictionary.md` produced with all metadata but placeholder descriptions. Every field shows `[NEEDS CLARIFICATION]`. |
+| 6.4 | Graceful degradation is active | `generate_qa_report.py` runs | `qa_report.md` shows completeness = 0% and `Partial` pipeline status. Clear note that LLM content is missing. |
 
 ---
 
-### US-7: Glossary Mapping (P3)
+### US-7: Glossary Mapping (P3 — Not Demo Day)
 
-**Pipeline Position:** Pre-LLM — Optional step. Would run **between US-2 (extraction) and the LLM call** if a glossary file is provided. Not implemented for demo day.
-
-**As a** documentation team member,
-**I want** the system to map field names to standardized glossary labels when a glossary file is provided,
-**So that** the data dictionary uses consistent organizational terminology.
+**Pipeline Position:** Pre-LLM — Optional step.
 
 **Priority:** P3 — Not required for demo day. Placeholder for future iteration.
 
-**Script:** `glossary_mapper.py`
-
-**Minimal spec:** If a glossary JSON file is provided alongside the schema, `glossary_mapper.py` performs exact and fuzzy matching of field names to glossary terms. Matched labels are included in the data dictionary output. Ambiguous matches are passed to the LLM (F1) for interpretation. Detailed design deferred.
+**Script:** `glossary_mapper.py` (not built for demo day)
 
 ---
 
@@ -207,47 +194,51 @@
 
 | # | Edge Case | Expected Script Behavior |
 |---|---|---|
-| 1 | File is not valid JSON (parse error) | `validate_input.py` catches the error immediately. Returns a specific error message. Pipeline stops. |
-| 2 | Valid JSON but missing `table_name` or `fields` | `validate_input.py` collects all structural errors and reports them together. Pipeline stops. |
-| 3 | `fields` array is empty | `validate_input.py` returns error: "Schema contains no extractable fields." Pipeline stops. |
-| 4 | A field is missing `field_name` | `validate_input.py` flags this as a structural error. Pipeline stops. |
-| 5 | A field is missing optional metadata (type, nullable, etc.) | `extract_fields.py` sets missing values to `null`. Pipeline continues. LLM handles ambiguity. |
-| 6 | Duplicate `field_name` values in schema | `extract_fields.py` includes both entries. Flags duplicates for QA report. Uses array position as fallback for LLM output matching. |
-| 7 | YAML or DDL file provided | `validate_input.py` returns: "Only JSON schema files are supported in this version." |
-| 8 | LLM returns malformed JSON | `attach_citations.py` catches parse error. Treats as LLM offline. Produces partial output. |
-| 9 | LLM returns fewer objects than input fields | `attach_citations.py` matches by `field_name`. Unmatched fields get placeholder values. Flagged in QA report. |
-| 10 | LLM returns a `field_name` that doesn't match any input | `attach_citations.py` logs the orphaned output. Ignores it. Notes mismatch in QA report. |
-| 11 | Schema with 500+ fields | Chunking logic is future scope. For demo day, all fields processed in one pass. Noted as a limitation. |
-| 12 | Glossary file provided but no matches found | `glossary_mapper.py` (P3) proceeds without mappings. Notes in output that no glossary matches were found. |
+| 1 | File is not valid JSON | `validate_input.py` catches the error. Returns error with line/column and hint. Pipeline stops. |
+| 2 | Valid JSON but missing `table_name`, `source_file`, or `fields` | `validate_input.py` collects all structural errors and reports together. Pipeline stops. |
+| 3 | `fields` array is empty | `validate_input.py` returns error: "Schema contains no extractable fields." |
+| 4 | A field is missing `field_name` | `validate_input.py` flags the position. Pipeline stops. |
+| 5 | `field_name` is empty, whitespace-only, or exceeds 255 characters | `validate_input.py` rejects with specific error per field position. |
+| 6 | A field is missing optional metadata | `extract_fields.py` fills deterministic defaults. Pipeline continues. |
+| 7 | Duplicate `field_name` values | `extract_fields.py` includes both, logs to `extraction_warnings.json`, uses position fallback for LLM matching. |
+| 8 | `field_name` has leading/trailing whitespace or newlines | `extract_fields.py` strips and logs correction. |
+| 9 | `nullable` provided as string `"true"`/`"false"` | `extract_fields.py` coerces to boolean and logs correction. |
+| 10 | LLM returns malformed JSON | `attach_citations.py` catches parse error. Treats as LLM offline. Produces partial output. |
+| 11 | LLM returns fewer objects than input fields | `attach_citations.py` matches by `field_name`. Unmatched fields get placeholders. |
+| 12 | LLM returns wrong `field_name` casing | Case-insensitive matching first, then position fallback. `name_case_mismatch` correction logged. |
+| 13 | LLM validation fails — retries | F2 retries up to 3 total attempts before degrading to placeholders. |
+| 14 | Template file missing | `assemble_output.py` or `generate_qa_report.py` stops with clear error. Setup error, not graceful degradation. |
+| 15 | Template has Git merge conflict markers | Script stops with error before any processing. |
+| 16 | Stale intermediate files from previous run | Clear `output/intermediate/` before starting new run. See Known Limitations. |
+| 17 | Schema with 500+ fields | Chunking is future scope. For demo day, all fields processed in one pass. Noted as limitation. |
 
 ---
 
 ## 3. Script Specifications
 
-> **Design Principles:** Each script is a single-purpose Python file. Scripts communicate via JSON files written to disk. Each script can be tested independently with known input/output. Scripts are designed to be straightforward and well-documented — the team uses AI-assisted development.
-
----
-
 ### 3.1 validate_input.py
 
 | Field | Value |
 |---|---|
-| **Purpose** | Validate that the user-provided file is well-formed JSON with the required schema structure. Gate the pipeline — nothing runs if validation fails. |
+| **Purpose** | Gate the pipeline. Validate that the user-provided file is well-formed JSON with the required schema structure. |
 | **Pipeline Position** | Pre-LLM — Step 1 |
-| **User Story** | US-1 |
 | **FRs Satisfied** | FR-001, FR-005 |
-| **Input** | Raw file path provided by the user |
-| **Output** | On success: `validated_schema.json`. On failure: error report listing all detected issues. |
+| **Input** | `output/intermediate/user_input.json` |
+| **Output** | On success: `output/intermediate/validated_schema.json`. On failure: error report listing all detected issues. |
 
 **Core Logic:**
 
-1. Attempt to parse the file as JSON. If parsing fails → return parse error with details. Stop.
-2. Check for required top-level keys: `table_name` (string), `fields` (non-empty array).
-3. Check each object in `fields` for required key: `field_name` (string).
-4. Collect ALL structural errors found in steps 2–3. Return them together.
-5. If no errors → write validated JSON to `validated_schema.json`. Return success.
-
-**Error Handling:** Tier 1 — all errors are blocking. Pipeline does not proceed until the user provides a valid file.
+1. Open with `encoding='utf-8-sig'` to strip Unicode BOM if present.
+2. Attempt JSON parse. If fails → print user-friendly error with line/column and hint. Stop.
+3. Validate root is a JSON object (not array or primitive).
+4. Validate `table_name` exists and is non-empty string.
+5. Validate `source_file` exists and is non-empty string.
+6. Validate `fields` exists and is non-empty array.
+7. Validate every element in `fields` is a JSON object.
+8. Validate every `field_name` is non-empty string after `.strip()`.
+9. Validate no `field_name` exceeds 255 characters after stripping.
+10. Collect ALL errors from steps 3–9 and report together.
+11. If no errors → write `validated_schema.json` using `safe_write_json()`.
 
 ---
 
@@ -255,29 +246,21 @@
 
 | Field | Value |
 |---|---|
-| **Purpose** | Parse the validated JSON schema and extract field-level metadata into the format expected by the LLM (F1). Construct `source_path` for each field. |
+| **Purpose** | Extract field-level metadata into the format expected by F1. Construct `source_path` for each field. |
 | **Pipeline Position** | Pre-LLM — Step 2 |
-| **User Story** | US-2 |
 | **FRs Satisfied** | FR-006 |
-| **Input** | `validated_schema.json` (output of validate_input.py) |
-| **Output** | `extracted_fields.json` — a JSON array of field metadata objects conforming to the F2 → F1 input contract. Also outputs `extraction_warnings.json` if any issues are detected (e.g., duplicate field names). |
+| **Input** | `output/intermediate/validated_schema.json` |
+| **Output** | `output/intermediate/extracted_fields.json` (always). `output/intermediate/extraction_warnings.json` (conditional — only if duplicates found). |
 
 **Core Logic:**
 
-1. Read `validated_schema.json`.
-2. For each field in the `fields` array, construct a metadata object:
-   - `field_name`: taken directly from input
-   - `table_name`: taken from top-level `table_name`
-   - `type`: taken from input, or `null` if missing
-   - `nullable`: taken from input, or `null` if missing
-   - `constraints`: taken from input, or empty array `[]` if missing
-   - `enums`: taken from input, or `null` if missing
-   - `source_path`: constructed as `"{source_file} → table: {table_name} → field: {field_name}"`
-   - `schema_comments`: taken from input, or `null` if missing
-3. Check for duplicate `field_name` values. If found, include both but log to `extraction_warnings.json`.
-4. Write the array to `extracted_fields.json`.
-
-**Error Handling:** Tier 2 — missing optional fields are set to `null`. Pipeline continues.
+1. For each field, produce exactly 8 keys: `field_name`, `type`, `nullable`, `constraints`, `enums`, `source_path`, `schema_comments`, `table_name`.
+2. Fill deterministic defaults for missing optional fields: `type` → `"UNKNOWN"`, `nullable` → `true`, `constraints` → `[]`, `enums` → `[]`, `schema_comments` → `null`.
+3. Strip whitespace and newlines from `field_name`. Log corrections if stripped.
+4. Coerce string `nullable` to boolean. Log correction if coerced.
+5. Construct `source_path`: `"{source_file} → table: {table_name} → field: {field_name}"`.
+6. Detect case-sensitive duplicate `field_name` values. Log to `extraction_warnings.json` if found. Do NOT create this file if no duplicates.
+7. Write `extracted_fields.json` — exactly 8 keys per record, always.
 
 ---
 
@@ -285,33 +268,22 @@
 
 | Field | Value |
 |---|---|
-| **Purpose** | Receive the LLM's output, validate it (count and field_name matching), and merge it with the extracted metadata and source citations to produce a unified field record for each field. |
-| **Pipeline Position** | Post-LLM — Step 1 (runs after F1/LLM returns `llm_output.json`) |
-| **User Story** | US-3, US-6 (graceful degradation) |
-| **FRs Satisfied** | FR-008 (script side), FR-009 (script side), FR-F2-001, FR-F2-002 |
-| **Input** | `extracted_fields.json` (from extract_fields.py) and `llm_output.json` (from F1/LLM). If LLM is offline or returned malformed output, `llm_output.json` may be absent or unparseable. |
-| **Output** | `merged_fields.json` — a JSON array where each field object contains both the extracted metadata AND the LLM-generated fields (description, confidence, evidence_refs, clarification_flag, source_path). |
+| **Purpose** | Validate LLM output, merge with extracted metadata, handle failures gracefully. |
+| **Pipeline Position** | Post-LLM — Step 1 |
+| **FRs Satisfied** | FR-008 (script side), FR-009 (script side) |
+| **Input** | `output/intermediate/extracted_fields.json` + `output/intermediate/llm_output.json` (optional) |
+| **Output** | `output/intermediate/merged_fields.json` — 14 keys per field. |
 
 **Core Logic:**
 
 1. Read `extracted_fields.json`.
-2. Attempt to read and parse `llm_output.json`.
-   - If file is missing or unparseable → set `llm_available = false`. Log the issue. Proceed to step 5.
-3. If LLM output is available, validate:
-   - Count check: `len(llm_output) == len(extracted_fields)`. Log mismatches.
-   - Name match: for each LLM output object, match `field_name` to an extracted field. Use exact match first; if duplicates exist, fall back to array position.
-4. For each extracted field, merge:
-   - All metadata from `extracted_fields.json`
-   - `description`, `confidence`, `evidence_refs`, `clarification_flag` from matched LLM output
-   - `source_path` from extracted metadata (script owns this, not the LLM)
-5. For any field where LLM output is missing (LLM offline, skipped field, or mismatch):
-   - `description`: "[LLM did not return a description]"
-   - `confidence`: "N/A"
-   - `evidence_refs`: "LLM output unavailable"
-   - `clarification_flag`: true
-6. Write to `merged_fields.json`.
-
-**Error Handling:** Graceful degradation. LLM failure never stops the pipeline — it produces partial output.
+2. Attempt to read and parse `llm_output.json`. If missing or unparseable → all fields get placeholders. Continue.
+3. If LLM output available, validate structure: root must be JSON array; each element must be object with all 5 keys; `confidence` must be `"High"`, `"Medium"`, or `"Low"`; `clarification_flag` must be boolean; `evidence_refs` must be non-empty array.
+4. Root-level failure → all placeholders. Per-field failure → only affected field gets placeholders.
+5. Match LLM output to input fields by `field_name` (case-insensitive). For duplicates, fall back to position matching.
+6. Apply corrections: `clarification_flag_override`, `name_case_mismatch`, `description_over_limit`, `order_mismatch`, `duplicate_name_in_output`, `field_name_whitespace_stripped`, `field_name_newline_stripped`, `nullable_type_coerced`.
+7. F2 owns retry logic — max 2 retries (3 total attempts). If all fail → graceful degradation.
+8. Write `merged_fields.json` — 14 keys per field.
 
 ---
 
@@ -319,21 +291,17 @@
 
 | Field | Value |
 |---|---|
-| **Purpose** | Add a `last_verified` timestamp to every field record. |
-| **Pipeline Position** | Post-LLM — Step 2a |
-| **User Story** | US-4 |
+| **Purpose** | Add a single `last_verified` timestamp to every field record. |
+| **Pipeline Position** | Post-LLM — Step 2 |
 | **FRs Satisfied** | FR-010 |
-| **Input** | `merged_fields.json` (from attach_citations.py) |
-| **Output** | `timestamped_fields.json` — same structure as input, with `last_verified` added to each field. |
+| **Input** | `output/intermediate/merged_fields.json` |
+| **Output** | `output/intermediate/timestamped_fields.json` — 15 keys per field. |
 
 **Core Logic:**
 
-1. Read `merged_fields.json`.
-2. Generate a single timestamp for the entire run: ISO 8601 format (e.g., `2026-04-03T14:30:00Z`).
-3. Add `last_verified: "{timestamp}"` to every field object.
-4. Write to `timestamped_fields.json`.
-
-**Design Note:** One timestamp per run (not per field) ensures consistency across the entire data dictionary. If the skill is re-run, all fields get the new timestamp.
+1. Generate one timestamp for the run: `datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')`.
+2. Do NOT use `datetime.now()` without timezone. Do NOT use `datetime.utcnow()` (deprecated in Python 3.12+).
+3. Add `last_verified` to every field. Same value for all fields in the run.
 
 ---
 
@@ -341,33 +309,24 @@
 
 | Field | Value |
 |---|---|
-| **Purpose** | Populate the data dictionary template (from F3) with the timestamped field data to produce the final `data_dictionary.md`. |
-| **Pipeline Position** | Post-LLM — Step 2b |
-| **User Story** | US-4 |
+| **Purpose** | Populate the data dictionary template to produce `data_dictionary.md`. |
+| **Pipeline Position** | Post-LLM — Step 3 |
 | **FRs Satisfied** | FR-012 |
-| **Input** | `timestamped_fields.json` (from add_timestamps.py) and `data_dictionary_template.md` (from F3 Assets). |
-| **Output** | `data_dictionary.md` — the final, human-readable data dictionary. |
+| **Input** | `output/intermediate/timestamped_fields.json` + `assets/data_dictionary_template.md` |
+| **Output** | `output/data_dictionary.md` |
 
 **Core Logic:**
 
-1. Read `timestamped_fields.json`.
-2. Read `data_dictionary_template.md` from F3 assets.
-3. For each field, populate the template with:
-   - `field_name`
-   - `type` (or "Not specified" if null)
-   - `nullable` (or "Not specified" if null)
-   - `constraints` (or "None" if empty)
-   - `enums` (or "None" if null)
-   - `description` (from LLM, or placeholder if unavailable)
-   - `source_path`
-   - `evidence_refs`
-   - `confidence`
-   - `clarification_flag` — if true, prepend `[NEEDS CLARIFICATION]` to the description
-   - `last_verified`
-4. If a glossary label exists (P3), include it.
-5. Write the assembled document to `data_dictionary.md`.
-
-**Dependency on F3:** This script requires the template from F3 (Assets). The template defines the exact Markdown structure — this script only fills in the values. Template design is NOT F2's responsibility.
+1. Use `check_template_exists()` to verify template. Stop with error if missing.
+2. Scan template for Git merge conflict markers. Stop with error if found.
+3. Substitute 3 header placeholders using `.replace()` in fixed order: `{table_name}`, `{source_file}`, `{generation_date}`. Do NOT use `str.format()`.
+4. Substitution happens BEFORE field data insertion.
+5. Apply `sanitize_for_markdown()` to ALL values in Markdown table cells.
+6. Apply display conversions: `[]` → `None`, `null` → `None`, `""` → `None`.
+7. Render enums separated by semicolons (not commas).
+8. Render `evidence_refs` as numbered list.
+9. Prepend `[NEEDS CLARIFICATION]` to description if `clarification_flag` = `true`.
+10. Scan assembled output for unreplaced placeholders. Log warning if found. Pipeline continues.
 
 ---
 
@@ -375,50 +334,45 @@
 
 | Field | Value |
 |---|---|
-| **Purpose** | Produce a QA report summarizing coverage stats, flagged items, and any warnings from the pipeline run. |
-| **Pipeline Position** | Post-LLM — Step 3 (final step) |
-| **User Story** | US-5 |
+| **Purpose** | Produce QA report summarizing coverage, confidence distribution, corrections, and warnings. |
+| **Pipeline Position** | Post-LLM — Step 4 (final) |
 | **FRs Satisfied** | FR-013 |
-| **Input** | `timestamped_fields.json` (from add_timestamps.py) and `extraction_warnings.json` (from extract_fields.py, if it exists). Also reads `qa_report_template.md` from F3 Assets. |
-| **Output** | `qa_report.md` — the QA report. |
+| **Input** | `output/intermediate/timestamped_fields.json` + `output/intermediate/extraction_warnings.json` (if exists) + `assets/qa_report_template.md` |
+| **Output** | `output/qa_report.md` |
 
 **Core Logic:**
 
-1. Read `timestamped_fields.json`.
-2. Calculate coverage stats:
-   - Total fields
-   - Fields with descriptions (description ≠ placeholder)
-   - Fields with citations (source_path is present)
-   - Fields with confidence scores (confidence ≠ "N/A")
-   - Fields flagged [NEEDS CLARIFICATION] (clarification_flag = true)
-   - Completeness percentage: (fields with descriptions / total fields) × 100
-3. If `extraction_warnings.json` exists, include warnings (e.g., duplicate field names).
-4. If LLM output was unavailable, include a note explaining which fields are missing LLM-generated content.
-5. Populate `qa_report_template.md` from F3 assets.
-6. Write to `qa_report.md`.
-
-**Dependency on F3:** This script requires the QA report template from F3 (Assets).
+1. Use `check_template_exists()` to verify template. Stop with error if missing.
+2. Scan template for Git merge conflict markers. Stop with error if found.
+3. Compute Coverage Statistics: coverage = (fields with `merge_status` = `"matched"` / total) × 100.
+4. Compute Confidence Distribution: count `"High"`, `"Medium"`, `"Low"`, `"N/A"`. Verify sum = total fields. Log integrity warning if not.
+5. List Fields Requiring Clarification: all where `clarification_flag` = `true`.
+6. List Merge Corrections (only if corrections exist).
+7. List Warnings (only if warnings exist — extraction warnings, LLM validation issues, integrity warnings).
+8. Compute Processing Notes: status is `Complete`, `Complete with warnings`, or `Partial`.
+9. Use exact section names from F3's template (authoritative per FR-F3-005).
 
 ---
 
-### 3.7 glossary_mapper.py (P3 — Not Demo Day)
+### 3.7 utils.py (Shared Utility Module)
 
-| Field | Value |
-|---|---|
-| **Purpose** | Map field names to standardized glossary labels using a provided glossary file. |
-| **Pipeline Position** | Pre-LLM — Optional step (between US-2 and LLM call) |
-| **User Story** | US-7 |
-| **FRs Satisfied** | FR-011 (script side) |
-| **Input** | `extracted_fields.json` and a glossary JSON file. |
-| **Output** | Updated `extracted_fields.json` with `glossary_label` added to matched fields. Ambiguous matches flagged for LLM interpretation. |
-| **Status** | P3 — Not required for demo day. Detailed design deferred. |
+Not a pipeline script. Imported by all 6 scripts. Contains:
 
-**Minimal Design:**
+- Placeholder constants (`PLACEHOLDER_DESCRIPTION`, `PLACEHOLDER_CONFIDENCE`, etc.)
+- Encoding constants (`INPUT_ENCODING = "utf-8-sig"`, `OUTPUT_ENCODING = "utf-8"`, `TEMPLATE_ENCODING = "utf-8"`)
+- `sanitize_for_markdown(value)` — escapes `|`, `*`, `` ` ``, `\`, `[`, `]`
+- `display_value_for_markdown(value)` — converts empty/null values for table cells
+- `safe_write_json(data, filepath)` — wraps `json.dump` in try/except
+- `safe_write_text(content, filepath)` — wraps file write in try/except
+- `ensure_output_dirs()` — creates `output/` and `output/intermediate/` if needed
+- `check_template_exists(filepath)` — stops with error if template missing
+- `check_git_conflict_markers(content, filepath)` — stops with error if markers found
 
-- Glossary file format: `{"glossary": [{"term": "LIMIT_BAL", "label": "Credit Limit Balance"}, ...]}`
-- Exact match on `field_name` → `term`. Assign `glossary_label`.
-- No exact match → flag for LLM interpretation (F1).
-- Runs between `extract_fields.py` and the LLM step if a glossary is provided.
+---
+
+### 3.8 glossary_mapper.py (P3 — Not Demo Day)
+
+Not built for demo day. See US-7.
 
 ---
 
@@ -427,107 +381,55 @@
 ### 4.1 Functional Requirements
 
 #### FR-001: Schema Input Acceptance
-
-- The system MUST accept JSON schema files as input for data dictionary generation.
-- **Demo day scope:** JSON only. YAML and DDL support are planned for future iteration.
-- The JSON schema must follow the approved flat structure (see Section 4.3).
+The system MUST accept JSON schema files as input. JSON only for demo day.
 
 #### FR-005: Input Validation
-
-- ALL input validation MUST be handled by deterministic script logic (`validate_input.py`) before any LLM processing begins.
-- Validation uses a two-tier approach:
-  - **Tier 1 (blocking):** Unparseable JSON, missing required structure (`table_name`, non-empty `fields` array, `field_name` per field) → pipeline stops, all errors reported together.
-  - **Tier 2 (non-blocking):** Individual fields with missing optional metadata (type, nullable, constraints, enums, schema_comments) → pipeline continues, missing values set to `null`.
+ALL input validation MUST be handled by `validate_input.py` before any LLM processing. Two-tier approach: Tier 1 (blocking) for structural errors, Tier 2 (non-blocking) for missing optional fields.
 
 #### FR-006: Field Extraction
-
-- The system MUST extract all fields from a schema including: `field_name`, `type`, `nullable`, `constraints`, `enums`, and `schema_comments`.
-- The system MUST construct a `source_path` for each field in the format: `"{source_file} → table: {table_name} → field: {field_name}"`.
-- Missing optional metadata MUST be set to `null` (not omitted).
+The system MUST extract all fields and construct `source_path` for each in format: `"{source_file} → table: {table_name} → field: {field_name}"`. Missing optional metadata filled with deterministic defaults.
 
 #### FR-008: Citation Attachment (Script Side)
-
-- The script MUST attach `source_path` to every field in the final output.
-- The script MUST include `evidence_refs` from the LLM output in the final data dictionary.
-- **Boundary:** The script determines WHERE the citation points (source_path). The LLM determines WHAT the evidence references say (evidence_refs content).
+The script MUST attach `source_path` to every field. `evidence_refs` content comes from the LLM — the script passes it through.
 
 #### FR-009: Confidence Score Assignment (Script Side)
-
-- The script MUST include the confidence score from the LLM output in the final data dictionary.
-- If the LLM did not return a confidence score for a field, the script MUST set confidence to "N/A".
-- **Boundary:** The LLM assigns the score (High/Medium/Low). The script passes it through and handles the "N/A" fallback.
+The script MUST include the LLM's confidence score in the final output. If LLM did not return a score, set `confidence` to `"N/A"`.
 
 #### FR-010: Timestamps
-
-- The system MUST include a `last_verified` timestamp for each field in ISO 8601 format.
-- One timestamp per pipeline run — all fields in a single run share the same timestamp.
+The system MUST include a `last_verified` ISO 8601 UTC timestamp for each field. One timestamp per run — all fields share the same value.
 
 #### FR-011: Glossary Mapping — Script Side (P3 — Deferred)
-
-- If a glossary JSON file is provided, the script MUST perform exact matching of field names to glossary terms.
-- Ambiguous or unmatched fields MUST be flagged for LLM interpretation.
-- **Priority:** P3 — Not required for demo day. Detailed design deferred.
+Not built for demo day.
 
 #### FR-012: Data Dictionary Output
-
-- The system MUST produce `data_dictionary.md` as the primary output.
-- The output MUST be assembled by populating the template from F3 (Assets) with field data.
-- **Demo day scope:** Markdown only. CSV output is planned for future iteration.
+The system MUST produce `data_dictionary.md` by populating F3's template. Markdown only for demo day.
 
 #### FR-013: QA Report Output
-
-- The system MUST produce `qa_report.md` showing:
-  - Total fields
-  - Fields with descriptions
-  - Fields with citations
-  - Fields with confidence scores
-  - Fields flagged [NEEDS CLARIFICATION]
-  - Completeness percentage
-  - Warnings (duplicate field names, LLM issues, validation mismatches)
-
----
+The system MUST produce `qa_report.md` with the 6 sections defined by F3's template (authoritative per FR-F3-005): Coverage Statistics, Confidence Distribution, Fields Requiring Clarification, Merge Corrections, Warnings, Processing Notes.
 
 ### 4.2 F2-Specific Requirements
 
 #### FR-F2-001: LLM Output Validation
-
-- `attach_citations.py` MUST validate the LLM's output before merging:
-  - Count check: number of LLM output objects must equal number of input fields.
-  - Name match: each LLM output `field_name` must match an input `field_name`.
-  - Mismatches MUST be logged and reported in the QA report.
-  - Validation failures MUST NOT stop the pipeline — unmatched fields receive placeholder values.
+`attach_citations.py` MUST validate count, field_name matching, confidence enum, flag type, and evidence_refs type. F2 owns retry logic — max 2 retries (3 total attempts).
 
 #### FR-F2-002: Graceful Degradation
-
-- If the LLM is offline or returns malformed output, all scripts MUST still run.
-- The system MUST produce a partial data dictionary containing all metadata but no descriptions, confidence scores, or clarification flags.
-- The QA report MUST note that LLM-generated content is missing.
+If the LLM is offline or returns invalid output after all retries, all scripts MUST still run and produce both deliverables with placeholder values.
 
 #### FR-F2-003: Error Collection
-
-- `validate_input.py` MUST collect all structural errors and report them together (not fail on the first error).
-- Exception: if the file is not parseable as JSON at all, the script fails immediately (there is nothing else to validate).
+`validate_input.py` MUST collect and report all structural errors together.
 
 #### FR-F2-004: Intermediate File Convention
+Scripts MUST communicate via JSON files in `output/intermediate/`. File names: `validated_schema.json`, `extracted_fields.json`, `extraction_warnings.json` (conditional), `llm_output.json` (from F1), `merged_fields.json`, `timestamped_fields.json`. Final outputs: `output/data_dictionary.md`, `output/qa_report.md`.
 
-- Scripts MUST communicate via JSON files written to disk.
-- File naming convention:
-  - `validated_schema.json`
-  - `extracted_fields.json`
-  - `extraction_warnings.json` (if warnings exist)
-  - `llm_output.json` (written by F1/SKILL.md)
-  - `merged_fields.json`
-  - `timestamped_fields.json`
-  - `data_dictionary.md` (final output)
-  - `qa_report.md` (final output)
+#### FR-F2-005: Standard Library Only
+No third-party packages. Python 3.11+ standard library only.
 
----
+#### FR-F2-006: File Encoding
+Input files: `utf-8-sig`. Output files: `utf-8`. Template files: `utf-8`. Never rely on Python's default encoding.
 
 ### 4.3 Input Contract (User → F2)
 
-The user provides a JSON schema file with this structure:
-
-**Required keys** (Tier 1 — must exist or pipeline stops):
+**Required top-level keys:**
 
 | Key | Type | Description |
 |---|---|---|
@@ -535,246 +437,121 @@ The user provides a JSON schema file with this structure:
 | `source_file` | string | Name of the schema file |
 | `fields` | array (non-empty) | List of field objects |
 
-**Required per field** (Tier 1 — must exist):
+**Required per field:**
 
 | Key | Type | Description |
 |---|---|---|
-| `field_name` | string | Column name in the database |
+| `field_name` | string | Non-empty, ≤255 characters after stripping |
 
-**Optional per field** (Tier 2 — missing is fine, set to null):
+**Optional per field (deterministic defaults if missing):**
 
-| Key | Type | Description |
-|---|---|---|
-| `type` | string | Data type (INTEGER, VARCHAR, DATE, etc.) |
-| `nullable` | boolean | Whether the field can be empty |
-| `constraints` | array of strings | Database rules (PRIMARY KEY, FOREIGN KEY, etc.) |
-| `enums` | array | Fixed list of allowed values, if any |
-| `schema_comments` | string | Human-written notes from the schema |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `type` | string | `"UNKNOWN"` | Data type |
+| `nullable` | boolean | `true` | Whether field can be empty |
+| `constraints` | array of strings | `[]` | Database rules |
+| `enums` | array | `[]` | Fixed allowed values |
+| `schema_comments` | string or null | `null` | Human-written notes |
 
-**Example:**
-
-```json
-{
-  "table_name": "credit_card_clients",
-  "source_file": "sample_schema.json",
-  "fields": [
-    {
-      "field_name": "ID",
-      "type": "INTEGER",
-      "nullable": false,
-      "constraints": ["PRIMARY KEY"],
-      "enums": null,
-      "schema_comments": "Unique client identifier"
-    },
-    {
-      "field_name": "PAY_0",
-      "type": "INTEGER",
-      "nullable": true,
-      "constraints": [],
-      "enums": [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-      "schema_comments": null
-    }
-  ]
-}
-```
 ### 4.4 Output Contract (F2 → F1)
 
-F2 sends the LLM a JSON array of field metadata objects:
-
-| Field | Type | Description | Source |
-|---|---|---|---|
-| `field_name` | string | Column name | Extracted from schema |
-| `table_name` | string | Table name | Extracted from schema |
-| `type` | string or null | Data type | Extracted from schema |
-| `nullable` | boolean or null | Nullable flag | Extracted from schema |
-| `constraints` | array | Constraint list | Extracted from schema |
-| `enums` | array or null | Enum values | Extracted from schema |
-| `source_path` | string | File → table → field path | Constructed by F2 |
-| `schema_comments` | string or null | Schema comments | Extracted from schema |
-
----
+F2 sends a JSON array of 8-key field objects to the LLM. See data-model.md Section 2 for full schema.
 
 ### 4.5 Input Contract (F1 → F2)
 
-F2 receives a JSON array from the LLM, one object per input field:
-
-| Field | Type | Description |
-|---|---|---|
-| `field_name` | string | Echo back for matching |
-| `description` | string | Plain-language explanation (≤25 words) |
-| `confidence` | string | "High", "Medium", or "Low" |
-| `evidence_refs` | string | What evidence the LLM used, with reasoning |
-| `clarification_flag` | boolean | Whether field needs human review |
-
-**Validation rules (F2 enforces):**
-
-- Count must match: `len(llm_output) == len(extracted_fields)`
-- Every `field_name` in LLM output must match an input `field_name`
-- For duplicate field names: fall back to array position matching
-- Mismatches are logged and reported in QA report — they do not stop the pipeline
-
-**This resolves F1 Open Items #1 and #2:**
-
-- **F1 Open Item #1:** LLM output format → **Confirmed: JSON array**
-- **F1 Open Item #2:** Count validation → **Confirmed: One output per input field, same order. F2 validates and handles mismatches gracefully.**
-
----
-
-### 4.6 Key Entities
-
-- **Schema File** — The user-provided JSON file describing a database table. One table per file. Follows the structure defined in Section 4.3.
-- **Field Metadata Object** — The extracted representation of a single field, containing all metadata from the schema plus the constructed `source_path`. This is what F2 sends to F1.
-- **LLM Output Object** — What the LLM returns for a single field: description, confidence, evidence_refs, clarification_flag. This is what F2 receives from F1.
-- **Merged Field Record** — The combined object after F2 merges extracted metadata with LLM output, citations, and timestamps. This is what populates the final data dictionary.
-- **Intermediate JSON Files** — The files scripts use to pass data between steps (see FR-F2-004). These also serve as debugging artifacts the team can inspect.
+F2 receives a JSON array from the LLM — one object per input field with exactly 5 keys: `field_name`, `description`, `confidence`, `evidence_refs`, `clarification_flag`. See data-model.md Section 4 for full schema and validation rules.
 
 ---
 
 ## 5. Pipeline Flow
-User provides JSON schema file │ ▼ validate_input.py ──── [FAIL] ──→ Error report (all issues listed) │ [PASS] │ ▼ extract_fields.py ──→ extracted_fields.json │ (+ extraction_warnings.json if duplicates) │ ▼ ┌─────────────────────────────────────────────────────────────┐ │ F1 — SKILL.md (LLM) │ │ Receives extracted_fields.json │ │ Generates descriptions, confidence scores, evidence_refs │ │ Returns llm_output.json │ │ (may fail or be offline → US-6 graceful degradation) │ └─────────────────────────────────────────────────────────────┘ │ ▼ attach_citations.py ──→ merged_fields.json │ (validates LLM output, merges, handles failures) ▼ add_timestamps.py ──→ timestamped_fields.json │ ▼ assemble_output.py ──→ data_dictionary.md ← uses F3 template │ ▼ generate_qa_report.py ──→ qa_report.md ← uses F3 template
 
-
-**F2's scope:** Everything in this diagram EXCEPT the F1 box. F2 owns all scripts, all intermediate files, and both final outputs. F1 owns the LLM reasoning. F3 owns the templates.
+```
+user_input.json
+      │
+      ▼
+validate_input.py ──── [FAIL] ──→ Error report (all issues listed)
+      │ [PASS]
+      ▼
+extract_fields.py ──→ extracted_fields.json
+      │               (+ extraction_warnings.json if duplicates)
+      ▼
+┌─────────────────────────────────────────┐
+│  F1 — SKILL.md (LLM)                   │
+│  Returns llm_output.json               │
+│  (may fail → US-6 graceful degradation)│
+└─────────────────────────────────────────┘
+      │
+      ▼
+attach_citations.py ──→ merged_fields.json
+      │
+      ▼
+add_timestamps.py ──→ timestamped_fields.json
+      │
+      ▼
+assemble_output.py ──→ data_dictionary.md  ← uses assets/data_dictionary_template.md
+      │
+      ▼
+generate_qa_report.py ──→ qa_report.md  ← uses assets/qa_report_template.md
+```
 
 ---
 
 ## 6. Boundaries — What F2 Does NOT Do
 
-| Responsibility | Owned By | Why Not F2 |
-|---|---|---|
-| Generating field descriptions | F1 (SKILL.md) | Requires LLM reasoning |
-| Assigning confidence scores (High/Medium/Low) | F1 (SKILL.md) | Requires LLM signal evaluation |
-| Interpreting ambiguous fields | F1 (SKILL.md) | Requires LLM judgment |
-| Interpreting glossary mappings for ambiguous matches | F1 (SKILL.md) | Requires LLM reasoning |
-| Deciding what [NEEDS CLARIFICATION] | F1 (SKILL.md) | Requires LLM assessment |
-| Designing the data_dictionary.md template | F3 (Assets) | Template design is a separate concern |
-| Designing the qa_report.md template | F3 (Assets) | Template design is a separate concern |
-| Creating sample_schema.json for testing | F3 (Assets) | Test data is an asset |
-
-**Key boundary rule:** If the logic can be done without an LLM (parsing, counting, validating, formatting, merging), it belongs in F2. If it requires reasoning, interpretation, or generation, it belongs in F1.
-
----
-
-## 7. Constitution Constraints Active on F2
-
-| Constitution Principle | F2 Compliance | Notes |
-|---|---|---|
-| **Accuracy Over Speed** | ✅ Compliant | Scripts validate inputs, validate LLM output, and report coverage stats. No shortcuts that sacrifice correctness. |
-| **Graceful Degradation** | ✅ Compliant | If LLM is offline, scripts still parse, extract, validate, timestamp, and produce partial output. QA report notes what's missing. US-6 tests this explicitly. |
-| **Simplicity First** | ✅ Compliant | Six small single-purpose Python scripts. No orchestrator, no frameworks, no databases. File-based I/O. SKILL.md is the orchestrator. |
-| **Audit-Ready by Default** | ✅ Compliant | Every field includes source_path, evidence_refs, confidence, and last_verified. QA report provides coverage stats. Intermediate JSON files are inspectable debugging artifacts. |
-| **Never send raw PII to LLM** | ✅ Compliant | F2 sends only metadata (field names, types, constraints). No actual data values are ever extracted or sent. |
-| **Never send API keys or credentials** | ✅ Compliant | No credentials in scripts or intermediate files. |
-| **Never send full source code or raw datasets** | ✅ Compliant | Only structured field metadata is sent to the LLM. |
-| **Never commit secrets to the repo** | ✅ Compliant | Scripts contain no secrets. |
-| **Never opt into LLM provider training** | ✅ Compliant | No opt-in. Scripts do not interact with LLM providers directly. |
-
-**No violations detected.** F2's design is fully aligned with the constitution.
-
----
-
-## 8. Processing Approach
-
-### Error Handling: Two-Tier System
-
-| Tier | When | Behavior | Example |
-|---|---|---|---|
-| **Tier 1 (Blocking)** | Input file is structurally invalid | Collect all errors, report together, stop pipeline | Missing `table_name`, empty `fields` array, unparseable JSON |
-| **Tier 2 (Non-blocking)** | Individual fields have missing/incomplete data | Set missing values to `null`, continue pipeline | Field missing `type`, `enums`, or `schema_comments` |
-
-**Exception within Tier 1:** If the file is not parseable as JSON at all, fail immediately — there are no further structural checks to perform.
-
-### File I/O Between Scripts
-
-- All scripts communicate via JSON files written to disk.
-- Intermediate files serve dual purpose: data handoff AND debugging artifacts.
-- File naming follows the convention in FR-F2-004.
-- The SKILL.md (F1) tells Claude when to call each script and passes the file paths.
-
-### Graceful Degradation (Constitution Principle 2)
-
-If the LLM goes offline or returns malformed output:
-
-| What Still Works | What's Missing |
+| Responsibility | Owned By |
 |---|---|
-| Schema parsing and validation | Field descriptions |
-| Field metadata extraction | Confidence scores |
-| Source path construction | Evidence references (LLM reasoning) |
-| Timestamps | Clarification flags |
-| Partial data dictionary assembly | — |
-| QA report (noting gaps) | — |
-
-The team can then manually write descriptions using the extracted metadata as input. This is the Constitution's "lose the narrative but keep the data" principle.
-
-### Chunking (Future Scope)
-
-- For demo day (25 fields), all fields are processed in a single LLM pass.
-- For schemas with 500+ fields, F2 would need to batch the `extracted_fields.json` into chunks before sending to the LLM. This is noted as future scope and is NOT implemented for demo day.
-- The SKILL.md instructions do not change regardless of batch size — chunking is purely F2's responsibility.
+| Generating field descriptions | F1 (SKILL.md) |
+| Assigning confidence scores | F1 (SKILL.md) |
+| Designing output templates | F3 (Assets) |
+| Creating sample_schema.json | F3 (Assets) |
+| Creating gold standard examples | F3 (Assets) |
 
 ---
 
-## 9. Success Criteria
+## 7. Known Limitations
+
+| Limitation | Mitigation |
+|---|---|
+| Stale intermediate files between runs | Clear `output/intermediate/` before each new run |
+| Case-variant duplicate field names not flagged at extraction | Post-handoff recommendation: add case-insensitive duplicate detection |
+| Large enum arrays rendered in full | Post-handoff: add optional truncation |
+| 500+ field schemas not chunked | Future scope — demo day is 25 fields |
+| Percentage rounding may not sum to 100% | Cosmetic only |
+
+---
+
+## 8. Success Criteria
 
 | SC ID | What We Measure | Threshold | How We Measure |
 |---|---|---|---|
-| SC-F2-001 | **Extraction Completeness** — All fields in the source schema are present in the extracted metadata | 100% of fields extracted | Automated: compare input field count to `extracted_fields.json` count |
-| SC-F2-002 | **Validation Accuracy** — Invalid inputs are caught and reported correctly | 100% of Tier 1 errors caught | Manual: test with known-bad inputs |
-| SC-F2-003 | **Citation Coverage** — Every field in the final data dictionary includes a `source_path` | 100% of fields have source_path | Automated: check `data_dictionary.md` |
-| SC-F2-004 | **Timestamp Coverage** — Every field includes a `last_verified` timestamp | 100% of fields have timestamp | Automated: check `data_dictionary.md` |
-| SC-F2-005 | **QA Report Accuracy** — Coverage stats in `qa_report.md` match actual counts in the data dictionary | Stats match exactly | Manual: cross-check report against data dictionary |
-| SC-F2-006 | **Graceful Degradation** — When LLM is offline, scripts still produce partial output with QA report | Partial output generated | Manual: simulate LLM failure, verify output |
-| SC-F2-007 | **Determinism** — Same input produces identical output across multiple runs | 100% match (excluding timestamps) | Automated: run 3x, diff outputs |
-| SC-F2-008 | **LLM Output Validation** — Mismatches between LLM output and input are detected and reported | All mismatches caught | Manual: test with intentionally mismatched LLM output |
+| SC-F2-001 | Extraction Completeness — all fields present in extracted metadata | 100% | Automated: compare input count to `extracted_fields.json` count |
+| SC-F2-002 | Validation Accuracy — invalid inputs caught and reported | 100% of Tier 1 errors caught | Manual: test with known-bad inputs |
+| SC-F2-003 | Citation Coverage — every field has `source_path` | 100% | Automated: check output |
+| SC-F2-004 | Timestamp Coverage — every field has `last_verified` | 100% | Automated: check output |
+| SC-F2-005 | QA Report Accuracy — stats match actual counts | Exact match | Manual: cross-check |
+| SC-F2-006 | Graceful Degradation — partial output when LLM offline | Both deliverables produced | Manual: simulate LLM failure |
+| SC-F2-007 | Determinism — same input → identical output | 100% match (excluding timestamps) | Automated: run 3x, diff outputs |
+| SC-F2-008 | LLM Output Validation — mismatches detected | All mismatches caught | Manual: test with mismatched output |
 
 ---
 
-## 10. Test Data
+## 9. Test Data
 
-- **Dataset:** UCI Default of Credit Card Clients (Kaggle)
-- **Source File:** `UCI_Credit_Card.csv`
-- **Fields:** 25 columns
-- **Test Input:** `sample_schema.json` — a JSON schema file created by the team from the CSV, following the structure defined in Section 4.3. This file is an F3 (Assets) deliverable.
-- **Why this dataset:** Mix of clear fields (`AGE`, `LIMIT_BAL`), ambiguous fields (`PAY_0`), cryptic numeric enums (`SEX`: 1/2), numbered series (`BILL_AMT1`–`BILL_AMT6`), and an oddly formatted field name (`default.payment.next.month`).
-- **Limitation:** This is a proof-of-concept test case. Production schemas may be more complex with nested structures, foreign keys across tables, and proprietary naming conventions.
-- **Recommendation:** Use AI-assisted development (e.g., GPT-4o Mini) to generate `sample_schema.json` from the CSV column headers. Team reviews and corrects the output.
+- **Dataset:** UCI Default of Credit Card Clients (Kaggle) — 25 fields
+- **Test Input:** `assets/sample_schema.json` — created by F3
+- **Why this dataset:** Mix of clear fields (`AGE`, `LIMIT_BAL`), ambiguous fields (`PAY_0`), cryptic enums (`SEX`), numbered series (`BILL_AMT1`–`BILL_AMT6`), and oddly formatted names (`default.payment.next.month`)
 
 ---
 
-## 11. Approved Assumptions
-
-| # | Assumption | Mitigation |
-|---|---|---|
-| 1 | One table per file is sufficient for demo day | Multi-table support is future scope. Team controls the demo input. |
-| 2 | LLM may return invalid JSON | Edge case #8: `attach_citations.py` catches parse errors, treats as LLM offline, produces partial output. |
-| 3 | 25 fields fits in one LLM pass | Chunking logic is future scope. 25 fields is well within context limits. |
-| 4 | `field_name` is unique enough for matching | Duplicate field names use position-based fallback. Duplicates flagged in QA report. |
-| 5 | Team can create `sample_schema.json` accurately | AI-assisted creation recommended. Pipeline handles imperfect input gracefully (Tier 2). |
-| 6 | Markdown output is sufficient for auditors | .csv and .docx are future scope. Acceptable for academic demo context. |
-| 7 | Intermediate JSON files between scripts work in Claude's sandbox | Low risk for 25 fields (tiny files). Consistent naming convention defined in FR-F2-004. |
-
----
-
-## 12. Open Items
+## 10. Open Items
 
 | # | Item | Status |
 |---|---|---|
-| 1 | F3 template design (`data_dictionary_template.md`) | ⏳ PENDING — F3 team creates this. `assemble_output.py` depends on it. |
-| 2 | F3 template design (`qa_report_template.md`) | ⏳ PENDING — F3 team creates this. `generate_qa_report.py` depends on it. |
-| 3 | F3 test data (`sample_schema.json`) | ⏳ PENDING — F3 team creates this from UCI CSV. |
-| 4 | Success criteria thresholds for SC-F2-005 and SC-F2-008 | ⏳ TBD — after baseline testing |
-| 5 | Chunking logic for 500+ field schemas | 📋 FUTURE SCOPE — not demo day |
-| 6 | YAML and DDL input support | 📋 FUTURE SCOPE — not demo day |
-| 7 | CSV output format | 📋 FUTURE SCOPE — not demo day |
-| 8 | Glossary mapper detailed design | 📋 FUTURE SCOPE — P3, not demo day |
-
----
-
-## 13. Resolved F1 Open Items
-
-F1's spec (Section 12) left two items pending for F2 to confirm. Both are now resolved:
-
-| F1 Open Item | Decision | Rationale |
-|---|---|---|
-| **#1: LLM output format** — "JSON array recommended, to be confirmed with F2 team" | **Confirmed: JSON array.** | Consistent with all intermediate file formats in F2. Easy to parse, validate, and merge. |
-| **#2: Count validation** — "LLM must return exactly one output object per input field, in the same order received, to be confirmed with F2 team" | **Confirmed: One output per input field, same order. F2 validates and handles mismatches gracefully.** | `attach_citations.py` checks count and field_name matching. Mismatches are logged in QA report but do not stop the pipeline. Position-based fallback for duplicate field names. |
+| 1 | F3 template `data_dictionary_template.md` | ⏳ PENDING — F3 deliverable |
+| 2 | F3 template `qa_report_template.md` | ⏳ PENDING — F3 deliverable |
+| 3 | F3 test data `sample_schema.json` | ⏳ PENDING — F3 deliverable |
+| 4 | SC-F2-005 and SC-F2-008 thresholds | ⏳ TBD after baseline |
+| 5 | Chunking for 500+ field schemas | 📋 FUTURE SCOPE |
+| 6 | YAML and DDL input support | 📋 FUTURE SCOPE |
+| 7 | CSV output format | 📋 FUTURE SCOPE |
+| 8 | Glossary mapper detailed design | 📋 FUTURE SCOPE — P3 |
