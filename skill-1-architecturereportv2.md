@@ -1,9 +1,9 @@
 # Architecture Review Report
 
-**Generated:** 2026-04-20 21:24:49  
+**Generated:** 2026-04-20 21:35:00  
 **Artifacts reviewed:** 5  
-**Total issues found:** 6  
-**Critical:** 0  |  **High:** 3  |  **Medium:** 2  |  **Low:** 1
+**Total issues found:** 2  
+**Critical:** 0  |  **High:** 0  |  **Medium:** 1  |  **Low:** 1
 
 ---
 
@@ -20,15 +20,15 @@
 
 ### Found vs Missing
 
-- **Found:** All requested review artifacts were present and readable.
-- **Missing:** No required artifact was missing for this review.
+- **Found:** All required architecture/design/spec/plan artifacts were found and readable.
+- **Missing:** No required artifact missing.
 
 ### Category Summaries
 
-- **Architecture summary:** File-based, script-driven Python pipeline with deterministic stage scripts and shared utility layer; outputs are `data_dictionary.md` and `qa_report.md`.
-- **Design principles summary:** Accuracy, audit readiness, graceful degradation, and simplicity-first with clear boundaries and minimal complexity.
-- **Spec summary:** Requires deterministic validation/extraction before LLM reasoning, citations and confidence in outputs, and strict output deliverables.
-- **Plan summary:** Defines clear F1/F2/F3 ownership boundaries and an 8-step end-to-end flow.
+- **Architecture:** Updated architecture describes a modular, file-based pipeline with `SKILL.md` orchestration and deterministic script stages for validate/extract/merge/timestamp/render/report.
+- **Design principles:** Constitution priorities (accuracy, graceful degradation, simplicity, audit readiness) are largely reflected in the architecture and pipeline behavior.
+- **Spec:** User Story 1 and FR-001/005/006/008/009/010/012/013 are represented by the documented stage flow and outputs.
+- **Plan:** Master plan workflow and script components are present and now materially aligned with the revised skill scope.
 
 ---
 
@@ -36,8 +36,7 @@
 
 | # | Severity | Principle | Violation | Recommendation |
 |---|----------|-----------|-----------|----------------|
-| 1 | High | Simplicity first and clear feature ownership (`constitution.md`, `data-dictionary-master.md`) | `SKILL.md` mixes F1 reasoning guidance with full F2 pipeline execution ownership, then later says it does not run downstream steps. | Refactor `SKILL.md` into two explicit blocks: (a) orchestration instructions and (b) LLM reasoning contract; remove contradictory scope lines. |
-| 2 | High | Audit-ready by default (`constitution.md`) | Contradictory run instructions can lead to non-repeatable execution paths, weakening traceability expectations. | Add one authoritative execution path in `SKILL.md` and ensure all sections point to that same path. |
+| 1 | Low | Audit-ready by default (`constitution.md`) | One residual wording mismatch in `SKILL.md` can produce interpretation drift for QA handling of over-length descriptions. | Normalize all wording to "target <=25 words; QA flags over-limit descriptions." |
 
 ---
 
@@ -45,15 +44,13 @@
 
 | # | Severity | Spec | Required Capability | Architecture Status | Recommendation |
 |---|----------|------|---------------------|---------------------|----------------|
-| 1 | Medium | `project-spec.md` FR-007 | Descriptions over 25 words should be flagged in QA, not hard-failed | `SKILL.md` currently uses strict `<=25 words` language that can be interpreted as a hard requirement. | Update `SKILL.md` wording to: "target <=25 words; over-limit descriptions are allowed and flagged by QA." |
-| 2 | High | `project-spec.md` + `data-dictionary-master.md` ownership model | F1 should define reasoning/output contract; F2 scripts own deterministic processing and post-processing behaviors | `SKILL.md` combines strict F1 contract language with end-to-end script ownership and then denies downstream ownership in Scope section. | Keep F1 output contract, but make script responsibilities explicitly delegated and consistent across all sections. |
-| 3 | Medium | `project-spec.md` User Story 1 flow | Input flow starts with schema upload and deterministic extraction before LLM reasoning | `SKILL.md` says expected input is pre-structured metadata, but pipeline starts with raw schema upload and extraction. | Clarify in `SKILL.md` that it supports schema-driven invocation and consumes extracted metadata after extraction stage. |
+| 1 | Medium | `project-spec.md` FR-007 | Descriptions should target <=25 words; longer descriptions are allowed and flagged by QA | `SKILL.md` now uses target-based wording in Step 4, but `Required output contract` and checklist line still state strict `<=25 words`, creating mixed enforcement semantics. | Update `SKILL.md` output contract + checklist phrasing to match FR-007 and Step 4 guidance. |
 
 ### Spec Coverage Summary
 
 | Spec File | Features Checked | Covered | Gaps | Coverage % |
 |-----------|------------------|---------|------|------------|
-| `project-spec.md` | F1/F2/F3 ownership, FR-007/008/012/013, data-dictionary flow | 4 | 3 | 57% |
+| `project-spec.md` | P1 data-dictionary flow, FR-001/005/006/007/008/009/010/012/013 | 8 | 1 | 89% |
 
 ---
 
@@ -61,7 +58,7 @@
 
 | # | Severity | Plan Item | Architecture Status | Recommendation |
 |---|----------|-----------|---------------------|----------------|
-| 1 | Low | `data-dictionary-master.md` naming and ownership consistency | Naming and responsibility language is inconsistent inside `SKILL.md` (`data-dictionary` vs `data_dictionary`, plus mixed ownership phrasing). | Normalize naming and add a one-line ownership note at top of `SKILL.md` (what F1 owns vs what scripts own). |
+| N/A | N/A | No issues found | No plan-component mismatches were detected between `data-dictionary-master.md` and `ARCHITECTURE.md` for the reviewed Data Dictionary scope. | Maintain current alignment; re-run review after major workflow changes. |
 
 ### Plan Coverage Summary
 
@@ -73,7 +70,7 @@
 | `add_timestamps.py` | Yes | Aligned |
 | `assemble_output.py` | Yes | Aligned |
 | `generate_qa_report.py` | Yes | Aligned |
-| Skill boundary contract clarity | Yes | Misaligned in `SKILL.md` wording |
+| LLM reasoning contract in `SKILL.md` | Yes | Aligned (minor wording issue only) |
 
 ---
 
@@ -81,34 +78,27 @@
 
 | # | Severity | Issue | Location | Recommendation |
 |---|----------|-------|----------|----------------|
-| 1 | High | Direct internal contradiction: "run full pipeline" vs "does not run downstream merge/timestamp/template steps." | `.cursor/skills/data_dictionary/SKILL.md` | Remove contradiction by rewriting the Scope section to match the actual pipeline steps. |
+| 1 | Low | Hotspot fan-in/fan-out counts appear inconsistent with the dependency narrative and diagrams (for example shared `utils.py` listed with fan-in `0` despite being imported by all scripts). | `.cursor/skills/ARCHITECTURE.md` hotspot table | Recompute and refresh hotspot metrics so the table matches the documented dependency graph. |
 
 ---
 
 ## 5. Suggested Fixes
 
-### `SKILL.md` concrete fixes (skill-only)
+### `SKILL.md` updates
 
-1. **Resolve scope contradiction**
-   - In `Scope`, remove lines that say the skill "does not run downstream merge/timestamp/template steps" if pipeline orchestration remains in this skill.
-   - Keep one consistent ownership statement across `Pipeline Orchestration`, `When to use`, and `Scope`.
+- Replace strict `description (plain language, <=25 words)` wording in `Required output contract` with target-based FR-007 language.
+- Update checklist item `Step 4: Write <=25-word description` to `Step 4: Write target <=25-word description; allow over-limit and flag for QA`.
+- Keep Step 4 and Step 7 wording as the source of truth and make all other sections consistent with them.
 
-2. **Make execution model explicit**
-   - Add a `Runtime Mode` subsection with one source-of-truth flow:
-     - schema input -> validate -> extract -> LLM reasoning -> attach citations -> add timestamps -> assemble output -> generate QA.
-   - Remove any alternate wording that implies metadata-only invocation unless intentionally supported as a second mode.
+### `ARCHITECTURE.md` updates
 
-3. **Align FR-007 wording in output contract**
-   - Change strict `description <=25 words` phrasing to target-based language:
-     - "Aim for <=25 words; if longer, keep evidence-grounded wording and allow QA report to flag."
+- Refresh hotspot table fan-in/fan-out values from current import graph so numerical metrics align with text and Mermaid diagrams.
+- Add a short note under `Hotspots` describing how metrics were computed (for repeatable future reviews).
 
-4. **Clarify input contract sequencing**
-   - Keep the per-field reasoning contract for Step 4, but preface it with:
-     - "This contract applies after `extract_fields.py` emits `extracted_fields.json`."
+### Spec updates
 
-5. **Add deterministic self-check gate**
-   - Keep Step 7 checks and add one final line:
-     - "If any check fails, emit valid 5-key fallback objects per field rather than partial output."
+- No spec updates required.
 
-6. **Standardize naming inside skill docs**
-   - Pick one canonical style for references in `SKILL.md` (`data_dictionary` or `data-dictionary`) and use it consistently throughout the file.
+### Plan updates
+
+- No plan updates required.
