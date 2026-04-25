@@ -1,7 +1,7 @@
 # Data Dictionary — obesity_dataset_engineered
 
-**Source File:** ObesityDataSet_engineered.json  
-**Generated:** 2026-04-24T17:38:18Z
+**Source File:** ObesityDataSet_engineered.csv  
+**Generated:** 2026-04-25T00:28:38Z
 
 ---
 
@@ -9,49 +9,49 @@
 
 | field_name | type | nullable | constraints | enums | description | confidence | last_verified |
 |---|---|---|---|---|---|---|---|
-| gender | VARCHAR | false | - | Female; Male | Self-reported gender category for the individual. | High | 2026-04-24T17:38:18Z |
-| age | INTEGER | false | - | - | Age of the individual in years. | High | 2026-04-24T17:38:18Z |
-| height | DECIMAL | false | - | - | Height measurement for the individual. | High | 2026-04-24T17:38:18Z |
-| weight | DECIMAL | false | - | - | Weight measurement for the individual. | High | 2026-04-24T17:38:18Z |
-| family_history_with_overweight | VARCHAR | false | - | no; yes | Indicates whether family history includes overweight conditions. | High | 2026-04-24T17:38:18Z |
-| favc | VARCHAR | false | - | no; yes | Indicates whether the individual frequently consumes high-calorie food. | High | 2026-04-24T17:38:18Z |
-| fcvc | INTEGER | false | - | 1.0; 2.0; 3.0 | Frequency score for vegetable consumption. | Medium | 2026-04-24T17:38:18Z |
-| ncp | INTEGER | false | - | 1; 3; 4 | Number of main meals consumed per day. | Medium | 2026-04-24T17:38:18Z |
-| caec | VARCHAR | false | - | Always; Frequently; Sometimes; no | Frequency category for eating food between main meals. | High | 2026-04-24T17:38:18Z |
-| smoke | VARCHAR | false | - | no; yes | Indicates whether the individual smokes. | High | 2026-04-24T17:38:18Z |
-| ch2o | INTEGER | false | - | 1.0; 2.0; 3.0 | Daily water consumption level score. | Medium | 2026-04-24T17:38:18Z |
-| scc | VARCHAR | false | - | no; yes | Indicates whether the individual monitors calorie intake. | High | 2026-04-24T17:38:18Z |
-| faf | INTEGER | false | - | 0.0; 1.0; 2.0; 3.0 | Physical activity frequency score. | Medium | 2026-04-24T17:38:18Z |
-| tue | INTEGER | false | - | 0; 1; 2 | Daily technology-use time score. | Medium | 2026-04-24T17:38:18Z |
-| calc | VARCHAR | false | - | Frequently; Sometimes; no | Frequency category for alcohol consumption. | High | 2026-04-24T17:38:18Z |
-| mtrans | VARCHAR | false | - | Automobile; Bike; Motorbike; Public_Transportation; Walking | Primary transportation mode used by the individual. | High | 2026-04-24T17:38:18Z |
-| nobeyesdad | VARCHAR | false | - | Insufficient_Weight; Normal_Weight; Obesity_Type_I; Obesity_Type_II; Obesity_Type_III; Overweight_Level_I; Overweight_Level_II | Obesity level classification label for the individual. | High | 2026-04-24T17:38:18Z |
-| feat_mean_age_by_nobeyesdad | DECIMAL | false | - | 21.3888888889; 22.3818181818; 25.1212121212; 26.0; 27.0731707317; 27.8181818182; 29.0 | Mean age value computed within each nobeyesdad group. | High | 2026-04-24T17:38:18Z |
-| feat_mean_faf_by_nobeyesdad | DECIMAL | false | - | 0.0; 0.4285714286; 0.6829268293; 0.9393939394; 1.0555555556; 1.1454545455; 1.1515151515 | Mean faf value computed within each nobeyesdad group. | High | 2026-04-24T17:38:18Z |
-| feat_mean_weight_by_gender | DECIMAL | false | - | 63.4882758621; 75.5901960784 | Mean weight value computed within each gender group. | High | 2026-04-24T17:38:18Z |
-| feat_bmi | DECIMAL | false | - | - | Engineered body mass index feature derived from height and weight. | High | 2026-04-24T17:38:18Z |
-| feat_caloric_balance_proxy | INTEGER | false | - | -2.0; -1.0; 0.0; 1.0; 2.0; 3.0 | Engineered proxy score representing caloric intake versus expenditure balance. | Medium | 2026-04-24T17:38:18Z |
-| feat_caec_one_hot_always | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals always. | Medium | 2026-04-24T17:38:18Z |
-| feat_caec_one_hot_frequently | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals frequently. | Medium | 2026-04-24T17:38:18Z |
-| feat_caec_one_hot_no | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals no. | Medium | 2026-04-24T17:38:18Z |
-| feat_caec_one_hot_sometimes | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals sometimes. | Medium | 2026-04-24T17:38:18Z |
-| feat_calc_one_hot_frequently | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals frequently. | Medium | 2026-04-24T17:38:18Z |
-| feat_calc_one_hot_no | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals no. | Medium | 2026-04-24T17:38:18Z |
-| feat_calc_one_hot_sometimes | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals sometimes. | Medium | 2026-04-24T17:38:18Z |
-| feat_family_history_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of family history categories. | Medium | 2026-04-24T17:38:18Z |
-| feat_favc_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of favc categories. | Medium | 2026-04-24T17:38:18Z |
-| feat_gender_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of gender categories. | Medium | 2026-04-24T17:38:18Z |
-| feat_mtrans_one_hot_automobile | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals automobile. | Medium | 2026-04-24T17:38:18Z |
-| feat_mtrans_one_hot_bike | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals bike. | Medium | 2026-04-24T17:38:18Z |
-| feat_mtrans_one_hot_motorbike | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals motorbike. | Medium | 2026-04-24T17:38:18Z |
-| feat_mtrans_one_hot_public_transportation | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals public transportation. | Medium | 2026-04-24T17:38:18Z |
-| feat_mtrans_one_hot_walking | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals walking. | Medium | 2026-04-24T17:38:18Z |
-| feat_scc_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of scc categories. | Medium | 2026-04-24T17:38:18Z |
-| feat_smoke_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of smoke categories. | Medium | 2026-04-24T17:38:18Z |
-| feat_age_scaled | DECIMAL | false | - | - | Scaled version of the age feature. | High | 2026-04-24T17:38:18Z |
-| feat_bmi_z_score | DECIMAL | false | - | - | Z-score standardized value of bmi. | High | 2026-04-24T17:38:18Z |
-| feat_height_scaled | DECIMAL | false | - | - | Scaled version of the height feature. | High | 2026-04-24T17:38:18Z |
-| feat_weight_scaled | DECIMAL | false | - | - | Scaled version of the weight feature. | High | 2026-04-24T17:38:18Z |
+| gender | VARCHAR | false | - | Female; Male | Self-reported gender category for the individual. | High | 2026-04-25T00:28:38Z |
+| age | INTEGER | false | - | - | Age of the individual in years. | High | 2026-04-25T00:28:38Z |
+| height | DECIMAL | false | - | - | Height measurement for the individual. | High | 2026-04-25T00:28:38Z |
+| weight | DECIMAL | false | - | - | Weight measurement for the individual. | High | 2026-04-25T00:28:38Z |
+| family_history_with_overweight | VARCHAR | false | - | no; yes | Indicates whether family history includes overweight conditions. | High | 2026-04-25T00:28:38Z |
+| favc | VARCHAR | false | - | no; yes | Indicates whether the individual frequently consumes high-calorie food. | High | 2026-04-25T00:28:38Z |
+| fcvc | INTEGER | false | - | 1.0; 2.0; 3.0 | Frequency score for vegetable consumption. | Medium | 2026-04-25T00:28:38Z |
+| ncp | INTEGER | false | - | 1; 3; 4 | Number of main meals consumed per day. | Medium | 2026-04-25T00:28:38Z |
+| caec | VARCHAR | false | - | Always; Frequently; Sometimes; no | Frequency category for eating food between main meals. | High | 2026-04-25T00:28:38Z |
+| smoke | VARCHAR | false | - | no; yes | Indicates whether the individual smokes. | High | 2026-04-25T00:28:38Z |
+| ch2o | INTEGER | false | - | 1.0; 2.0; 3.0 | Daily water consumption level score. | Medium | 2026-04-25T00:28:38Z |
+| scc | VARCHAR | false | - | no; yes | Indicates whether the individual monitors calorie intake. | High | 2026-04-25T00:28:38Z |
+| faf | INTEGER | false | - | 0.0; 1.0; 2.0; 3.0 | Physical activity frequency score. | Medium | 2026-04-25T00:28:38Z |
+| tue | INTEGER | false | - | 0; 1; 2 | Daily technology-use time score. | Medium | 2026-04-25T00:28:38Z |
+| calc | VARCHAR | false | - | Frequently; Sometimes; no | Frequency category for alcohol consumption. | High | 2026-04-25T00:28:38Z |
+| mtrans | VARCHAR | false | - | Automobile; Bike; Motorbike; Public_Transportation; Walking | Primary transportation mode used by the individual. | High | 2026-04-25T00:28:38Z |
+| nobeyesdad | VARCHAR | false | - | Insufficient_Weight; Normal_Weight; Obesity_Type_I; Obesity_Type_II; Obesity_Type_III; Overweight_Level_I; Overweight_Level_II | Obesity level classification label for the individual. | High | 2026-04-25T00:28:38Z |
+| feat_mean_age_by_nobeyesdad | DECIMAL | false | - | - | Mean age value computed within each nobeyesdad group. | High | 2026-04-25T00:28:38Z |
+| feat_mean_faf_by_nobeyesdad | DECIMAL | false | - | - | Mean faf value computed within each nobeyesdad group. | High | 2026-04-25T00:28:38Z |
+| feat_mean_weight_by_gender | DECIMAL | false | - | - | Mean weight value computed within each gender group. | High | 2026-04-25T00:28:38Z |
+| feat_bmi | DECIMAL | false | - | - | Engineered body mass index feature derived from height and weight. | High | 2026-04-25T00:28:38Z |
+| feat_caloric_balance_proxy | INTEGER | false | - | -2.0; -1.0; 0.0; 1.0; 2.0; 3.0 | Engineered proxy score representing caloric intake versus expenditure balance. | Medium | 2026-04-25T00:28:38Z |
+| feat_caec_one_hot_always | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals always. | Medium | 2026-04-25T00:28:38Z |
+| feat_caec_one_hot_frequently | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals frequently. | Medium | 2026-04-25T00:28:38Z |
+| feat_caec_one_hot_no | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals no. | Medium | 2026-04-25T00:28:38Z |
+| feat_caec_one_hot_sometimes | INTEGER | false | - | 0; 1 | One-hot indicator showing whether caec equals sometimes. | Medium | 2026-04-25T00:28:38Z |
+| feat_calc_one_hot_frequently | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals frequently. | Medium | 2026-04-25T00:28:38Z |
+| feat_calc_one_hot_no | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals no. | Medium | 2026-04-25T00:28:38Z |
+| feat_calc_one_hot_sometimes | INTEGER | false | - | 0; 1 | One-hot indicator showing whether calc equals sometimes. | Medium | 2026-04-25T00:28:38Z |
+| feat_family_history_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of family history categories. | Medium | 2026-04-25T00:28:38Z |
+| feat_favc_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of favc categories. | Medium | 2026-04-25T00:28:38Z |
+| feat_gender_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of gender categories. | Medium | 2026-04-25T00:28:38Z |
+| feat_mtrans_one_hot_automobile | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals automobile. | Medium | 2026-04-25T00:28:38Z |
+| feat_mtrans_one_hot_bike | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals bike. | Medium | 2026-04-25T00:28:38Z |
+| feat_mtrans_one_hot_motorbike | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals motorbike. | Medium | 2026-04-25T00:28:38Z |
+| feat_mtrans_one_hot_public_transportation | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals public transportation. | Medium | 2026-04-25T00:28:38Z |
+| feat_mtrans_one_hot_walking | INTEGER | false | - | 0; 1 | One-hot indicator showing whether mtrans equals walking. | Medium | 2026-04-25T00:28:38Z |
+| feat_scc_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of scc categories. | Medium | 2026-04-25T00:28:38Z |
+| feat_smoke_encoded | INTEGER | false | - | 0; 1 | Numeric encoded representation of smoke categories. | Medium | 2026-04-25T00:28:38Z |
+| feat_age_scaled | DECIMAL | false | - | - | Scaled version of the age feature. | High | 2026-04-25T00:28:38Z |
+| feat_bmi_z_score | DECIMAL | false | - | - | Z-score standardized value of bmi. | High | 2026-04-25T00:28:38Z |
+| feat_height_scaled | DECIMAL | false | - | - | Scaled version of the height feature. | High | 2026-04-25T00:28:38Z |
+| feat_weight_scaled | DECIMAL | false | - | - | Scaled version of the weight feature. | High | 2026-04-25T00:28:38Z |
 
 ## Evidence & Citations
 
