@@ -1,6 +1,6 @@
 # QA Report — obesity_dataset_engineered
 
-**Run Timestamp:** 2026-04-24T17:38:18Z  
+**Run Timestamp:** 2026-04-25T00:28:38Z  
 **Pipeline Version:** f2-v1  
 **Input File:** See source_path values in processed field records.  
 **Table Name:** obesity_dataset_engineered  
@@ -38,7 +38,7 @@
 
 ## 6. Processing Notes
 
-- Generated at: 2026-04-24T17:38:18Z
+- Generated at: 2026-04-25T00:28:38Z
 - Pipeline version: f2-v1
 - Total fields processed: 43
 - LLM availability: available
