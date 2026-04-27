@@ -581,18 +581,15 @@ This skillset is **not** responsible for:
 
 - **Pipeline Documentation** — Generate step-by-step documentation from codebases with source citations
 - **Test Evidence Summary** — Summarize test results (pass/fail, coverage) with links to test files
+- **Hooks & Sub-agents** — Trigger skills automatically and chain them together. Examples: using data dictionary output as input to RCSA skill for enhanced linkage, and scaling skills to handle enterprise-level datasets (currently tested up to ~100 fields)
+- **More Skills** — Extend the control library with domain-specific controls without rebuilding the system
 - **YAML/DDL Input Support** — Accept YAML and DDL formats in addition to JSON
 - **CSV/DOCX Output** — Export data dictionaries and narratives to CSV and Word formats
-- **Glossary Mapping** — Link field descriptions to business glossaries
-- **Repo Scanning** — Automatically discover and index repository artifacts
-- **Change Detection** — Track changes to schemas and artifacts over time
-- **CLI Packaging** — Command-line interface for easy invocation
 
 ### Integration Layer (Post-Demo)
-- Unified CLI for both skills
-- Automated repo scanning and artifact discovery
-- Integration with version control systems
-- Scheduled documentation updates
+
+- Integration with Synchrony's internal data sources and systems
+- Compliance with Synchrony's security and data governance policies
 
 ---
 
